@@ -1,6 +1,9 @@
 modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
+issueTrackerURL = "https://github.com/sokratis12GR/Mob-Settings/issues" #optional
+updateJSONURL = "https://sokratis.space/mobsettings/26.1/update.json" #optional
+displayURL = "https://www.curseforge.com/minecraft/mc-mods/mob-settings" #optional
 
 [[mods]]
 modId="${mod_id}"
