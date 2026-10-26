@@ -13,6 +13,9 @@ public final class MobSettings {
     public MobSettings(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.COMMON, MSConfig.SPEC);
         NeoForge.EVENT_BUS.addListener(MobDrops::onLivingDrops);
+        NeoForge.EVENT_BUS.addListener(MobAttributes::onEntityJoinLevel);
+        NeoForge.EVENT_BUS.addListener(MobDespawn::onMobDespawn);
+        NeoForge.EVENT_BUS.addListener(MobSpawnLight::onFinalizeSpawn);
         MobSpawns.register(modBus);
     }
 }

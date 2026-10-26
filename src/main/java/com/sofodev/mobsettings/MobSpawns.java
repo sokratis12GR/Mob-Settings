@@ -4,7 +4,10 @@ import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.random.Weighted;
+import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.neoforged.bus.api.IEventBus;
@@ -12,6 +15,8 @@ import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public final class MobSpawns implements BiomeModifier {
@@ -31,13 +36,28 @@ public final class MobSpawns implements BiomeModifier {
         if (phase == Phase.REMOVE) {
             for (String line : MSConfig.REMOVE_SPAWNS.get()) {
                 String[] fields = line.split("\\|", -1);
-                if (fields.length != 2 || !matches(fields[1], biomeId)) continue;
+                if ((fields.length != 2 && fields.length != 3) || !matches(fields[1], biomeId)) continue;
                 String target = fields[0];
                 if (!target.equals("*") && !registered(target)) continue;
+                double percent = 100;
+                if (fields.length == 3) {
+                    try {
+                        percent = Double.parseDouble(fields[2]);
+                    } catch (NumberFormatException ex) { continue; }
+                    if (!Double.isFinite(percent) || percent < 0 || percent > 100) continue;
+                }
+                double keep = 1 - percent / 100;
+                Predicate<Weighted<MobSpawnSettings.SpawnerData>> isTarget = entry ->
+                        target.equals("*") || BuiltInRegistries.ENTITY_TYPE.getKey(entry.value().type()).toString().equals(target);
                 // Removing from all spawn categories also handles modded categories.
-                for (var category : net.minecraft.world.entity.MobCategory.values()) {
-                    builder.getMobSpawnSettings().getSpawner(category).removeIf(entry ->
-                            target.equals("*") || BuiltInRegistries.ENTITY_TYPE.getKey(entry.value().type()).toString().equals(target));
+                for (MobCategory category : MobCategory.values()) {
+                    WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner = builder.getMobSpawnSettings().getSpawner(category);
+                    List<Weighted<MobSpawnSettings.SpawnerData>> matched = spawner.getList().stream().filter(isTarget).toList();
+                    spawner.removeIf(isTarget);
+                    for (Weighted<MobSpawnSettings.SpawnerData> entry : matched) {
+                        int weight = (int) Math.round(entry.weight() * keep);
+                        if (weight > 0) spawner.add(entry.value(), weight);
+                    }
                 }
             }
         } else {
@@ -54,6 +74,10 @@ public final class MobSpawns implements BiomeModifier {
                 } catch (NumberFormatException ex) { continue; }
                 if (weight <= 0 || min <= 0 || max < min || weight > 100000 || max > 1000) continue;
                 EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(id);
+                if (type.getCategory() == MobCategory.MISC) {
+                    // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; skip instead of spawning the wrong mob.
+                    continue;
+                }
                 builder.getMobSpawnSettings().addSpawn(type.getCategory(), weight,
                         new MobSpawnSettings.SpawnerData(type, min, max));
             }
