@@ -76,8 +76,9 @@ final class Suggestions {
                 .map(item -> new Option(BuiltInRegistries.ITEM.getKey(item).toString(), itemName(item))));
     }
 
+    // Item stacks need data components, which aren't bound on the title screen, so translate the ID directly.
     private static String itemName(Item item) {
-        return item.getName(item.getDefaultInstance()).getString();
+        return Component.translatable(item.getDescriptionId()).getString();
     }
 
     private static List<Option> attributeOptions(@Nullable String entityContext) {
