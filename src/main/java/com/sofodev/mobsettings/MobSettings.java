@@ -11,7 +11,7 @@ public final class MobSettings {
     public static final String MODID = "mobsettings";
 
     public MobSettings(IEventBus modBus, ModContainer container) {
-        container.registerConfig(ModConfig.Type.COMMON, MSConfig.SPEC);
+        container.registerConfig(ModConfig.Type.LOCAL, MSConfig.SPEC, MODID + "-common.toml");
         NeoForge.EVENT_BUS.addListener(MobDrops::onLivingDrops);
         NeoForge.EVENT_BUS.addListener(MobAttributes::onEntityJoinLevel);
         NeoForge.EVENT_BUS.addListener(MobDespawn::onMobDespawn);

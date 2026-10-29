@@ -1,10 +1,10 @@
 {
   "homepage": "https://www.curseforge.com/minecraft/mc-mods/mob-settings",
   "promos": {
-    "26.2-latest": "1.0",
-    "26.2-recommended": "1.0"
+    "26.3-latest": "1.0",
+    "26.3-recommended": "1.0"
   },
-  "26.2": {
-    "1.0": "Ported to Minecraft 26.2."
+  "26.3": {
+    "1.0": "Ported to Minecraft 26.3."
   }
 }

@@ -2,11 +2,11 @@ package com.sofodev.mobsettings;
 
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.random.Weighted;
-import net.minecraft.util.random.WeightedList;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.util.random.WeightedList;import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
@@ -30,7 +30,7 @@ public final class MobSpawns implements BiomeModifier {
     @Override public MapCodec<? extends BiomeModifier> codec() { return CODEC.get(); }
 
     @Override
-    public void modify(Holder<Biome> biome, Phase phase, ModifiableBiomeInfo.BiomeInfo.Builder builder) {
+    public void modify(RegistryAccess registries, Holder<Biome> biome, Phase phase, ModifiableBiomeInfo.BiomeInfo.Builder builder) {
         if (phase != Phase.ADD && phase != Phase.REMOVE) return;
         String biomeId = biome.unwrapKey().map(key -> key.identifier().toString()).orElse("");
         if (phase == Phase.REMOVE) {
@@ -78,8 +78,7 @@ public final class MobSpawns implements BiomeModifier {
                     // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; skip instead of spawning the wrong mob.
                     continue;
                 }
-                builder.getMobSpawnSettings().addSpawn(type.getCategory(), weight,
-                        new MobSpawnSettings.SpawnerData(type, min, max));
+                builder.getMobSpawnSettings().addSpawn(type, weight, min, max);
             }
         }
     }

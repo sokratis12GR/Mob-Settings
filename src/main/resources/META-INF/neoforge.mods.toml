@@ -2,7 +2,7 @@ modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
 issueTrackerURL = "https://github.com/sokratis12GR/Mob-Settings/issues"
-updateJSONURL = "https://sokratis.space/mobsettings/26.2/update.json"
+updateJSONURL = "https://sokratis.space/mobsettings/26.3/update.json"
 
 [[mods]]
 modId="${mod_id}"
