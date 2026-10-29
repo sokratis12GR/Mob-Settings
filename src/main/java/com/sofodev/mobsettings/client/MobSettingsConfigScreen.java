@@ -27,7 +27,7 @@ public final class MobSettingsConfigScreen extends ConfigurationScreen.Configura
         ModConfigSpec.ConfigValue<List<String>> rules = (ModConfigSpec.ConfigValue<List<String>>) (Object) list;
         Component tooltip = getTooltipComponent(key, null);
         Button button = Button.builder(Component.translatable(SECTION, Component.translatable(SECTION_TEXT)),
-                        b -> minecraft.setScreen(new RuleListScreen(this, type, rules.get(), updated -> {
+                        b -> minecraft.gui.setScreen(new RuleListScreen(this, type, rules.get(), updated -> {
                             if (!updated.equals(rules.get())) {
                                 rules.set(updated);
                                 onChanged(key);

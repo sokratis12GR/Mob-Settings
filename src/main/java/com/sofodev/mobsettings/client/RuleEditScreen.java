@@ -13,7 +13,7 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.Nullable;
 
@@ -87,7 +87,7 @@ final class RuleEditScreen extends Screen {
     /** Per-option help when one exists (e.g. removeDrops chance), otherwise the shared help for that field. */
     private Component help(RuleType.Field field) {
         String specific = "mobsettings.ui.help." + type.key() + "." + field.name();
-        return Component.translatable(I18n.exists(specific) ? specific : "mobsettings.ui.help." + field.name());
+        return Component.translatable(Language.getInstance().has(specific) ? specific : "mobsettings.ui.help." + field.name());
     }
 
     private static Component hint(RuleType.Field field) {
@@ -178,12 +178,12 @@ final class RuleEditScreen extends Screen {
     private void save() {
         if (error != null) return;
         onSave.accept(type.join(values));
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override

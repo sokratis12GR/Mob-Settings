@@ -43,7 +43,7 @@ final class RuleListScreen extends Screen {
                 .bounds(width / 2 - 154, buttonY - 24, 308, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> {
                     onDone.accept(List.copyOf(rules));
-                    minecraft.setScreen(parent);
+                    minecraft.gui.setScreen(parent);
                 })
                 .bounds(width / 2 - 154, buttonY, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
@@ -51,12 +51,12 @@ final class RuleListScreen extends Screen {
     }
 
     private void edit(String line, Consumer<String> onSave) {
-        minecraft.setScreen(new RuleEditScreen(this, type, line, onSave));
+        minecraft.gui.setScreen(new RuleEditScreen(this, type, line, onSave));
     }
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override

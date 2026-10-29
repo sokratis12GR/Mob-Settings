@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -149,7 +149,7 @@ final class Suggestions {
         Identifier parsed = Identifier.tryParse(id);
         if (parsed == null) return null;
         String key = "mobsettings.attribute." + parsed.getNamespace() + "." + parsed.getPath();
-        return I18n.exists(key) ? Component.translatable(key) : null;
+        return Language.getInstance().has(key) ? Component.translatable(key) : null;
     }
 
     private static List<Option> biomeOptions() {
