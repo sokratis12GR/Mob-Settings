@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.common.ModConfigSpec;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /** NeoForge's config section screen, with the rule lists opening the searchable editor instead of raw text lists. */
 public final class MobSettingsConfigScreen extends ConfigurationScreen.ConfigurationSectionScreen {

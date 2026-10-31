@@ -8,7 +8,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -16,7 +16,7 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.biome.Biome;
 import net.neoforged.neoforge.common.ModConfigSpec;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 /**
@@ -28,14 +28,14 @@ final class Rules {
 
     record RemoveDrop(@Nullable EntityType<?> entity, @Nullable Item item, double chance) {}
     record ExtraDrop(@Nullable EntityType<?> entity, Item item, int count, double chance) {}
-    record RemoveSpawn(@Nullable EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
-    record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max) {}
+    record RemoveSpawn(@Nullable EntityType<?> entity, @Nullable ResourceLocation dimension, BiomeRule biome, double keep) {}
+    record AddSpawn(EntityType<?> entity, @Nullable ResourceLocation dimension, BiomeRule biome, int weight, int min, int max) {}
     record AttributeOverride(@Nullable EntityType<?> entity, Holder<Attribute> attribute, double value) {}
     record DespawnRange(@Nullable EntityType<?> entity, double range) {}
     record LightRestriction(@Nullable EntityType<?> entity, int min, int max) {}
 
     /** A biome ID, a {@code #tag}, or {@code *}. */
-    record BiomeRule(@Nullable Identifier id, @Nullable TagKey<Biome> tag) {
+    record BiomeRule(@Nullable ResourceLocation id, @Nullable TagKey<Biome> tag) {
         boolean matches(Holder<Biome> biome) {
             if (tag != null) return biome.is(tag);
             return id == null || biome.is(id);
@@ -90,7 +90,7 @@ final class Rules {
     private Rules() {}
 
     static boolean matches(@Nullable EntityType<?> rule, EntityType<?> actual) { return rule == null || rule == actual; }
-    static boolean matches(@Nullable Identifier rule, Identifier actual) { return rule == null || rule.equals(actual); }
+    static boolean matches(@Nullable ResourceLocation rule, ResourceLocation actual) { return rule == null || rule.equals(actual); }
 
     private static String[] fields(String line, int min, int max) {
         String[] fields = line.split("\\|", -1);
@@ -101,16 +101,16 @@ final class Rules {
         return fields;
     }
 
-    private static Identifier id(String value, String what) {
-        Identifier id = Identifier.tryParse(value);
+    private static ResourceLocation id(String value, String what) {
+        ResourceLocation id = ResourceLocation.tryParse(value);
         if (id == null) throw new Invalid("\"" + value + "\" is not a valid " + what + " ID");
         return id;
     }
 
     private static <T> T registered(Registry<T> registry, String value, String what) {
-        Identifier id = id(value, what);
+        ResourceLocation id = id(value, what);
         if (!registry.containsKey(id)) throw new Invalid("unknown " + what + " " + value);
-        return registry.getValue(id);
+        return registry.get(id);
     }
 
     private static @Nullable EntityType<?> entity(String value) {
@@ -118,7 +118,7 @@ final class Rules {
     }
 
     // Dimensions and biomes are datapack-driven and may not exist yet when this is parsed, so only the syntax is checked.
-    private static @Nullable Identifier dimension(String value) {
+    private static @Nullable ResourceLocation dimension(String value) {
         return value.equals("*") ? null : id(value, "dimension");
     }
 

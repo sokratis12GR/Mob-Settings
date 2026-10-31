@@ -19,7 +19,7 @@ tasks.named('jar', Jar).configure {
     manifest.attributes(['Implementation-Version': project.version])
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 sourceSets.main.resources {
     srcDir 'src/generated/client'
@@ -37,6 +37,8 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
+            // run/ is shared with the 26.x branches, whose world 1.21.1 can't load.
+            programArguments.addAll '--world', 'world-1.21.1'
         }
         gameTestServer {
             type = 'gameTestServer'

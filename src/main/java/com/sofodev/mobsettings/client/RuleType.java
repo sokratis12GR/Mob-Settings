@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.network.chat.Component;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /** Field layout of each pipe-delimited config list; ranges mirror the server-side parsers. */
 record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {

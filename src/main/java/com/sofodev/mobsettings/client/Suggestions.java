@@ -13,8 +13,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
@@ -28,7 +28,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /** Searchable option sources for the rule editor's picker fields. */
 final class Suggestions {
@@ -55,7 +55,7 @@ final class Suggestions {
     }
 
     static boolean isKnown(RuleType.Kind kind, String id) {
-        Identifier parsed = Identifier.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
+        ResourceLocation parsed = ResourceLocation.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
         if (parsed == null) return false;
         return switch (kind) {
             case ENTITY, SPAWNABLE_ENTITY -> options(kind, null).stream().anyMatch(o -> o.id().equals(parsed.toString()));
@@ -99,18 +99,18 @@ final class Suggestions {
     /** Default attributes of a mob, or null when the ID isn't a mob. */
     @SuppressWarnings("unchecked")
     private static @Nullable AttributeSupplier supplier(@Nullable String entityId) {
-        Identifier id = entityId == null ? null : Identifier.tryParse(entityId);
+        ResourceLocation id = entityId == null ? null : ResourceLocation.tryParse(entityId);
         if (id == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) return null;
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(id);
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(id);
         return DefaultAttributes.hasSupplier(type) ? DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type) : null;
     }
 
     private static Holder<Attribute> attribute(String id) {
-        return BuiltInRegistries.ATTRIBUTE.get(Identifier.parse(id)).orElseThrow();
+        return BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation.parse(id)).orElseThrow();
     }
 
     private static boolean isAttribute(String id) {
-        Identifier parsed = Identifier.tryParse(id);
+        ResourceLocation parsed = ResourceLocation.tryParse(id);
         return parsed != null && BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
     }
 
@@ -152,7 +152,7 @@ final class Suggestions {
     static @Nullable Component help(RuleType.Kind kind, String id) {
         if (id.equals("*")) return Component.translatable("mobsettings.ui.any.help");
         if (kind != RuleType.Kind.ATTRIBUTE) return null;
-        Identifier parsed = Identifier.tryParse(id);
+        ResourceLocation parsed = ResourceLocation.tryParse(id);
         if (parsed == null) return null;
         String key = "mobsettings.attribute." + parsed.getNamespace() + "." + parsed.getPath();
         return I18n.exists(key) ? Component.translatable(key) : null;
@@ -163,7 +163,7 @@ final class Suggestions {
         var connection = Minecraft.getInstance().getConnection();
         Stream<ResourceKey<Level>> keys = connection != null ? connection.levels().stream() : Stream.of(Level.OVERWORLD, Level.NETHER, Level.END);
         return sorted(keys.map(key -> {
-            Identifier id = key.identifier();
+            ResourceLocation id = key.location();
             String translation = "mobsettings.dimension." + id.getNamespace() + "." + id.getPath();
             return new Option(id.toString(), I18n.exists(translation) ? I18n.get(translation) : id.toString());
         }));
@@ -174,7 +174,7 @@ final class Suggestions {
         var level = Minecraft.getInstance().level;
         if (level != null) {
             var biomes = level.registryAccess().lookupOrThrow(Registries.BIOME);
-            return Stream.concat(sorted(biomes.listElementIds().map(key -> biomeOption(key.identifier()))).stream(),
+            return Stream.concat(sorted(biomes.listElementIds().map(key -> biomeOption(key.location()))).stream(),
                     sorted(biomes.listTagIds().map(tag -> tagOption(tag.location()))).stream()).toList();
         }
         if (vanillaBiomes == null) {
@@ -183,7 +183,7 @@ final class Suggestions {
             for (Field field : Biomes.class.getFields()) {
                 if (!Modifier.isStatic(field.getModifiers()) || field.getType() != ResourceKey.class) continue;
                 try {
-                    found.add(biomeOption(((ResourceKey<?>) field.get(null)).identifier()));
+                    found.add(biomeOption(((ResourceKey<?>) field.get(null)).location()));
                 } catch (IllegalAccessException ignored) {}
             }
             for (Field field : BiomeTags.class.getFields()) {
@@ -197,11 +197,11 @@ final class Suggestions {
         return vanillaBiomes;
     }
 
-    private static Option biomeOption(Identifier id) {
+    private static Option biomeOption(ResourceLocation id) {
         return new Option(id.toString(), Component.translatable("biome." + id.getNamespace() + "." + id.getPath()).getString());
     }
 
-    private static Option tagOption(Identifier id) {
+    private static Option tagOption(ResourceLocation id) {
         return new Option("#" + id, tagName("#" + id));
     }
 
