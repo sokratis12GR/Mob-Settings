@@ -1,24 +1,31 @@
 package com.sofodev.mobsettings;
 
 import com.mojang.serialization.MapCodec;
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.random.Weighted;
 import net.minecraft.util.random.WeightedList;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
+import net.neoforged.neoforge.common.world.MobSpawnSettingsBuilder;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
-import java.util.List;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 
+/**
+ * Applies spawn rules in two layers, each removing before adding:
+ * rules for every dimension edit the biomes themselves (so chunk-generation spawns and other mods see them),
+ * then dimension-specific rules edit the spawn list at runtime, since a biome doesn't know which dimension it's in.
+ */
 public final class MobSpawns implements BiomeModifier {
     private static final MobSpawns INSTANCE = new MobSpawns();
     private static final DeferredRegister<MapCodec<? extends BiomeModifier>> SERIALIZERS =
@@ -31,62 +38,63 @@ public final class MobSpawns implements BiomeModifier {
 
     @Override
     public void modify(Holder<Biome> biome, Phase phase, ModifiableBiomeInfo.BiomeInfo.Builder builder) {
-        if (phase != Phase.ADD && phase != Phase.REMOVE) return;
-        String biomeId = biome.unwrapKey().map(key -> key.identifier().toString()).orElse("");
+        MobSpawnSettingsBuilder spawns = builder.getMobSpawnSettings();
+        // REMOVE runs after every mod's ADD phase, and our additions wait until MODIFY so removals never undo them.
         if (phase == Phase.REMOVE) {
-            for (String line : MSConfig.REMOVE_SPAWNS.get()) {
-                String[] fields = line.split("\\|", -1);
-                if ((fields.length != 2 && fields.length != 3) || !matches(fields[1], biomeId)) continue;
-                String target = fields[0];
-                if (!target.equals("*") && !registered(target)) continue;
-                double percent = 100;
-                if (fields.length == 3) {
-                    try {
-                        percent = Double.parseDouble(fields[2]);
-                    } catch (NumberFormatException ex) { continue; }
-                    if (!Double.isFinite(percent) || percent < 0 || percent > 100) continue;
-                }
-                double keep = 1 - percent / 100;
-                Predicate<Weighted<MobSpawnSettings.SpawnerData>> isTarget = entry ->
-                        target.equals("*") || BuiltInRegistries.ENTITY_TYPE.getKey(entry.value().type()).toString().equals(target);
+            for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
+                if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
                 // Removing from all spawn categories also handles modded categories.
-                for (MobCategory category : MobCategory.values()) {
-                    WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner = builder.getMobSpawnSettings().getSpawner(category);
-                    List<Weighted<MobSpawnSettings.SpawnerData>> matched = spawner.getList().stream().filter(isTarget).toList();
-                    spawner.removeIf(isTarget);
-                    for (Weighted<MobSpawnSettings.SpawnerData> entry : matched) {
-                        int weight = (int) Math.round(entry.weight() * keep);
-                        if (weight > 0) spawner.add(entry.value(), weight);
-                    }
-                }
+                for (MobCategory category : MobCategory.values()) reduce(spawns.getSpawner(category), rule);
             }
-        } else {
-            for (String line : MSConfig.ADD_SPAWNS.get()) {
-                String[] fields = line.split("\\|", -1);
-                if (fields.length != 5 || !matches(fields[1], biomeId)) continue;
-                Identifier id = Identifier.tryParse(fields[0]);
-                if (id == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) continue;
-                final int weight, min, max;
-                try {
-                    weight = Integer.parseInt(fields[2]);
-                    min = Integer.parseInt(fields[3]);
-                    max = Integer.parseInt(fields[4]);
-                } catch (NumberFormatException ex) { continue; }
-                if (weight <= 0 || min <= 0 || max < min || weight > 100000 || max > 1000) continue;
-                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(id);
-                if (type.getCategory() == MobCategory.MISC) {
-                    // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; skip instead of spawning the wrong mob.
-                    continue;
-                }
-                builder.getMobSpawnSettings().addSpawn(type.getCategory(), weight,
-                        new MobSpawnSettings.SpawnerData(type, min, max));
+        } else if (phase == Phase.MODIFY) {
+            for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+                if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
+                spawns.addSpawn(rule.entity().getCategory(), rule.weight(), spawnerData(rule));
             }
         }
     }
 
-    private static boolean matches(String rule, String actual) { return rule.equals("*") || rule.equals(actual); }
-    private static boolean registered(String name) {
-        Identifier id = Identifier.tryParse(name);
-        return id != null && BuiltInRegistries.ENTITY_TYPE.containsKey(id);
+    public static void onPotentialSpawns(LevelEvent.PotentialSpawns event) {
+        if (!(event.getLevel() instanceof Level level)) return;
+        Identifier dimension = level.dimension().identifier();
+        Holder<Biome> biome = null;
+        for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
+            if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
+            if (biome == null) biome = level.getBiome(event.getPos());
+            if (!rule.biome().matches(biome)) continue;
+            for (Weighted<MobSpawnSettings.SpawnerData> entry : List.copyOf(event.getSpawnerDataList())) {
+                if (!Rules.matches(rule.entity(), entry.value().type())) continue;
+                event.removeSpawnerData(entry);
+                Weighted<MobSpawnSettings.SpawnerData> reduced = reduced(entry, rule);
+                if (reduced != null) event.addSpawnerData(reduced);
+            }
+        }
+        for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+            if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
+            if (rule.entity().getCategory() != event.getMobCategory()) continue;
+            if (biome == null) biome = level.getBiome(event.getPos());
+            if (!rule.biome().matches(biome)) continue;
+            event.addSpawnerData(new Weighted<>(spawnerData(rule), rule.weight()));
+        }
+    }
+
+    private static void reduce(WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner, Rules.RemoveSpawn rule) {
+        Predicate<Weighted<MobSpawnSettings.SpawnerData>> isTarget = entry -> Rules.matches(rule.entity(), entry.value().type());
+        List<Weighted<MobSpawnSettings.SpawnerData>> matched = spawner.getList().stream().filter(isTarget).toList();
+        spawner.removeIf(isTarget);
+        for (Weighted<MobSpawnSettings.SpawnerData> entry : matched) {
+            Weighted<MobSpawnSettings.SpawnerData> reduced = reduced(entry, rule);
+            if (reduced != null) spawner.add(reduced.value(), reduced.weight());
+        }
+    }
+
+    /** The entry with its weight cut by the rule's percent, or null once nothing is left. */
+    private static @Nullable Weighted<MobSpawnSettings.SpawnerData> reduced(Weighted<MobSpawnSettings.SpawnerData> entry, Rules.RemoveSpawn rule) {
+        int weight = (int) Math.round(entry.weight() * rule.keep());
+        return weight > 0 ? new Weighted<>(entry.value(), weight) : null;
+    }
+
+    private static MobSpawnSettings.SpawnerData spawnerData(Rules.AddSpawn rule) {
+        return new MobSpawnSettings.SpawnerData(rule.entity(), rule.min(), rule.max());
     }
 }

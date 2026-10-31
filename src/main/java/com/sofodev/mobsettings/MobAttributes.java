@@ -1,11 +1,8 @@
 package com.sofodev.mobsettings;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /** Applies registry-ID-based base attribute overrides when a living entity joins the world. */
@@ -14,21 +11,18 @@ public final class MobAttributes {
 
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (!(event.getEntity() instanceof LivingEntity living)) return;
-        String entityId = BuiltInRegistries.ENTITY_TYPE.getKey(living.getType()).toString();
-        for (String line : MSConfig.ATTRIBUTE_OVERRIDES.get()) {
-            String[] fields = line.split("\\|", -1);
-            if (fields.length != 3 || !(fields[0].equals("*") || fields[0].equals(entityId))) continue;
-            Identifier attributeId = Identifier.tryParse(fields[1]);
-            if (attributeId == null || !BuiltInRegistries.ATTRIBUTE.containsKey(attributeId)) continue;
-            final double value;
-            try {
-                value = Double.parseDouble(fields[2]);
-            } catch (NumberFormatException ex) { continue; }
-            if (!Double.isFinite(value)) continue;
-            Holder<Attribute> attribute = BuiltInRegistries.ATTRIBUTE.wrapAsHolder(BuiltInRegistries.ATTRIBUTE.getValue(attributeId));
-            AttributeInstance instance = living.getAttribute(attribute);
-            if (instance == null) continue;
-            instance.setBaseValue(attribute.value().sanitizeValue(value));
+        boolean maxHealthChanged = false;
+        // Wildcard rules go first so a rule naming this mob wins over a * rule for the same attribute.
+        for (boolean wildcardPass : new boolean[] {true, false}) {
+            for (Rules.AttributeOverride rule : Rules.ATTRIBUTE_OVERRIDES.get()) {
+                if ((rule.entity() == null) != wildcardPass || !Rules.matches(rule.entity(), living.getType())) continue;
+                AttributeInstance instance = living.getAttribute(rule.attribute());
+                if (instance == null) continue;
+                instance.setBaseValue(rule.attribute().value().sanitizeValue(rule.value()));
+                if (rule.attribute().value() == Attributes.MAX_HEALTH.value()) maxHealthChanged = true;
+            }
         }
+        // A new mob starts with its normal health, so fill it up to the new maximum (saved mobs keep their health).
+        if (maxHealthChanged && !event.loadedFromDisk()) living.setHealth(living.getMaxHealth());
     }
 }

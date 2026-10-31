@@ -1,5 +1,6 @@
 package com.sofodev.mobsettings.client;
 
+import com.sofodev.mobsettings.SpawnLines;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -9,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 /** Field layout of each pipe-delimited config list; ranges mirror the server-side parsers. */
 record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
     /** ATTRIBUTE_VALUE is a decimal whose range comes from the attribute chosen in the same line. */
-    enum Kind { ENTITY, SPAWNABLE_ENTITY, ITEM, BIOME, ATTRIBUTE, INTEGER, DECIMAL, ATTRIBUTE_VALUE }
+    enum Kind { ENTITY, SPAWNABLE_ENTITY, ITEM, DIMENSION, BIOME, ATTRIBUTE, INTEGER, DECIMAL, ATTRIBUTE_VALUE }
 
     /** Decimal fields with {@code percent} set are entered as 0-1 but read better as 0-100%. */
     record Field(String name, Kind kind, boolean wildcard, boolean optional, double min, double max, boolean percent) {
@@ -39,11 +40,12 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             "removeDrops", new RuleType("removeDrops", List.of(
                     picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, true), chance(true)), -1, -1),
             "addSpawns", new RuleType("addSpawns", List.of(
-                    picker("entity", Kind.SPAWNABLE_ENTITY, false), picker("biome", Kind.BIOME, true),
-                    integer("weight", 1, 100000), integer("minGroup", 1, 1000), integer("maxGroup", 1, 1000)), 3, 4),
+                    picker("entity", Kind.SPAWNABLE_ENTITY, false), picker("dimension", Kind.DIMENSION, true),
+                    picker("biome", Kind.BIOME, true),
+                    integer("weight", 1, 100000), integer("minGroup", 1, 1000), integer("maxGroup", 1, 1000)), 4, 5),
             "removeSpawns", new RuleType("removeSpawns", List.of(
-                    picker("entity", Kind.SPAWNABLE_ENTITY, true), picker("biome", Kind.BIOME, true),
-                    decimal("percent", 0, 100, true)), -1, -1),
+                    picker("entity", Kind.SPAWNABLE_ENTITY, true), picker("dimension", Kind.DIMENSION, true),
+                    picker("biome", Kind.BIOME, true), decimal("percent", 0, 100, true)), -1, -1),
             "attributeOverrides", new RuleType("attributeOverrides", List.of(
                     picker("entity", Kind.ENTITY, true), picker("attribute", Kind.ATTRIBUTE, false),
                     new Field("value", Kind.ATTRIBUTE_VALUE, false, false, -Double.MAX_VALUE, Double.MAX_VALUE, false)), -1, -1),
@@ -52,8 +54,17 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             "lightSpawnRestrictions", new RuleType("lightSpawnRestrictions", List.of(
                     picker("entity", Kind.ENTITY, true), integer("minLight", 0, 15), integer("maxLight", 0, 15)), 1, 2));
 
+    /** Lines saved before a field was added, rewritten into the current layout. */
+    String upgrade(String line) {
+        return switch (key) {
+            case "addSpawns" -> SpawnLines.upgradeAdd(line);
+            case "removeSpawns" -> SpawnLines.upgradeRemove(line);
+            default -> line;
+        };
+    }
+
     String[] split(String line) {
-        String[] parts = line.split("\\|", -1);
+        String[] parts = upgrade(line).split("\\|", -1);
         String[] values = new String[fields.size()];
         for (int i = 0; i < values.length; i++) values[i] = i < parts.length ? parts[i].trim() : "";
         return values;
@@ -81,7 +92,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
 
     /** Returns null when valid, otherwise a translation key describing the first problem. */
     String validate(String line) {
-        String[] raw = line.split("\\|", -1);
+        String[] raw = upgrade(line).split("\\|", -1);
         long required = fields.stream().filter(f -> !f.optional()).count();
         if (raw.length < required || raw.length > fields.size()) return "mobsettings.ui.error.fieldCount";
         String[] values = split(line);
