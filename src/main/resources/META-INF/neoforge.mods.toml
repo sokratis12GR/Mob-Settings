@@ -2,7 +2,6 @@ modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
 issueTrackerURL = "https://github.com/sokratis12GR/Mob-Settings/issues"
-updateJSONURL = "https://sokratis.space/mobsettings/26.2/update.json"
 
 [[mods]]
 modId="${mod_id}"
@@ -12,6 +11,7 @@ authors="${mod_authors}"
 description='''${mod_description}'''
 logoFile="mob_settings.png"
 displayURL = "https://www.curseforge.com/minecraft/mc-mods/mob-settings"
+updateJSONURL = "https://sokratis.space/mobsettings/26.2/update.json"
 
 [[dependencies.mobsettings]]
 modId="neoforge"
