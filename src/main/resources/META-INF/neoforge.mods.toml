@@ -10,6 +10,7 @@ version="${mod_version}"
 displayName="${mod_name}"
 authors="${mod_authors}"
 description='''${mod_description}'''
+logoFile="mob_settings.png"
 displayURL = "https://www.curseforge.com/minecraft/mc-mods/mob-settings"
 
 [[dependencies.mobsettings]]
