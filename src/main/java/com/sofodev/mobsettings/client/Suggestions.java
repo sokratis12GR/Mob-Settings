@@ -15,6 +15,8 @@ import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobCategory;
@@ -24,6 +26,7 @@ import net.minecraft.world.entity.ai.attributes.RangedAttribute;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
 import org.jspecify.annotations.Nullable;
 
@@ -45,20 +48,21 @@ final class Suggestions {
             case SPAWNABLE_ENTITY -> spawnableEntities != null ? spawnableEntities : (spawnableEntities = entityOptions(true));
             case ITEM -> items != null ? items : (items = itemOptions());
             case ATTRIBUTE -> attributeOptions(entityContext);
+            case DIMENSION -> dimensionOptions();
             case BIOME -> biomeOptions();
             case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> List.of();
         };
     }
 
     static boolean isKnown(RuleType.Kind kind, String id) {
-        Identifier parsed = Identifier.tryParse(id);
+        Identifier parsed = Identifier.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
         if (parsed == null) return false;
         return switch (kind) {
             case ENTITY, SPAWNABLE_ENTITY -> options(kind, null).stream().anyMatch(o -> o.id().equals(parsed.toString()));
             case ITEM -> BuiltInRegistries.ITEM.containsKey(parsed);
             case ATTRIBUTE -> BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
-            // Biomes are datapack-driven, so modded ones can't be listed from the title screen.
-            case BIOME -> true;
+            // Biomes, biome tags and dimensions are datapack-driven, so modded ones can't be listed from the title screen.
+            case DIMENSION, BIOME -> true;
             case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> false;
         };
     }
@@ -130,12 +134,14 @@ final class Suggestions {
     /** Player-facing name for an ID; wildcards and unknown IDs are described rather than left raw. */
     static String displayName(RuleType.Kind kind, String id) {
         if (id.equals("*")) return anyLabel(kind).getString();
+        if (kind == RuleType.Kind.BIOME && id.startsWith("#")) return tagName(id);
         return options(kind, null).stream().filter(o -> o.id().equals(id)).findFirst().map(Option::name).orElse(id);
     }
 
     static Component anyLabel(RuleType.Kind kind) {
         String suffix = switch (kind) {
             case ITEM -> "item";
+            case DIMENSION -> "dimension";
             case BIOME -> "biome";
             default -> "entity";
         };
@@ -152,27 +158,55 @@ final class Suggestions {
         return Language.getInstance().has(key) ? Component.translatable(key) : null;
     }
 
+    /** The dimensions the server told us about when in a world, otherwise the vanilla ones. */
+    private static List<Option> dimensionOptions() {
+        var connection = Minecraft.getInstance().getConnection();
+        Stream<ResourceKey<Level>> keys = connection != null ? connection.levels().stream() : Stream.of(Level.OVERWORLD, Level.NETHER, Level.END);
+        return sorted(keys.map(key -> {
+            Identifier id = key.identifier();
+            String translation = "mobsettings.dimension." + id.getNamespace() + "." + id.getPath();
+            return new Option(id.toString(), Language.getInstance().getOrDefault(translation, id.toString()));
+        }));
+    }
+
+    /** Biomes, then biome tags (written as #tag). */
     private static List<Option> biomeOptions() {
         var level = Minecraft.getInstance().level;
         if (level != null) {
-            return sorted(level.registryAccess().lookupOrThrow(Registries.BIOME).listElementIds()
-                    .map(key -> biomeOption(key.identifier())));
+            var biomes = level.registryAccess().lookupOrThrow(Registries.BIOME);
+            return Stream.concat(sorted(biomes.listElementIds().map(key -> biomeOption(key.identifier()))).stream(),
+                    sorted(biomes.listTagIds().map(tag -> tagOption(tag.location()))).stream()).toList();
         }
         if (vanillaBiomes == null) {
             List<Option> found = new ArrayList<>();
+            List<Option> tags = new ArrayList<>();
             for (Field field : Biomes.class.getFields()) {
                 if (!Modifier.isStatic(field.getModifiers()) || field.getType() != ResourceKey.class) continue;
                 try {
                     found.add(biomeOption(((ResourceKey<?>) field.get(null)).identifier()));
                 } catch (IllegalAccessException ignored) {}
             }
-            vanillaBiomes = sorted(found.stream());
+            for (Field field : BiomeTags.class.getFields()) {
+                if (!Modifier.isStatic(field.getModifiers()) || field.getType() != TagKey.class) continue;
+                try {
+                    tags.add(tagOption(((TagKey<?>) field.get(null)).location()));
+                } catch (IllegalAccessException ignored) {}
+            }
+            vanillaBiomes = Stream.concat(sorted(found.stream()).stream(), sorted(tags.stream()).stream()).toList();
         }
         return vanillaBiomes;
     }
 
     private static Option biomeOption(Identifier id) {
         return new Option(id.toString(), Component.translatable("biome." + id.getNamespace() + "." + id.getPath()).getString());
+    }
+
+    private static Option tagOption(Identifier id) {
+        return new Option("#" + id, tagName("#" + id));
+    }
+
+    private static String tagName(String tag) {
+        return Component.translatable("mobsettings.ui.biomeTag", tag).getString();
     }
 
     private static List<Option> sorted(Stream<Option> options) {

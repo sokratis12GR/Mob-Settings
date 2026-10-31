@@ -49,7 +49,7 @@ final class RuleEditScreen extends Screen {
         for (int i = 0; i < type.fields().size(); i++) {
             RuleType.Field field = type.fields().get(i);
             int index = i;
-            EditBox box = new EditBox(font, BOX_X, TOP + i * ROW_HEIGHT, boxWidth, 20, fieldLabel(field));
+            EditBox box = new EditBox(font, BOX_X, TOP + i * rowHeight(), boxWidth, 20, fieldLabel(field));
             box.setMaxLength(256);
             box.setValue(values[i]);
             box.setHint(hint(field));
@@ -78,6 +78,11 @@ final class RuleEditScreen extends Screen {
         setActiveField(type.fields().get(firstPicker).isPicker() ? firstPicker : -1);
         setInitialFocus(boxes.get(firstPicker));
         revalidate();
+    }
+
+    /** Rows shrink on short screens so rules with many fields stay above the error line and buttons. */
+    private int rowHeight() {
+        return Math.max(22, Math.min(ROW_HEIGHT, (height - TOP - 44) / type.fields().size()));
     }
 
     private Component fieldLabel(RuleType.Field field) {
@@ -201,14 +206,17 @@ final class RuleEditScreen extends Screen {
         graphics.centeredText(font, title, width / 2, 10, 0xFFFFFFFF);
         graphics.centeredText(font, Component.translatable("mobsettings.configuration." + type.key() + ".tooltip"),
                 width / 2, 22, 0xFFA0A0A0);
+        int rowHeight = rowHeight();
+        // The note sits under the box; on very short screens there's no room for it.
+        int noteOffset = Math.min(23, rowHeight - font.lineHeight);
         for (int i = 0; i < type.fields().size(); i++) {
             RuleType.Field field = type.fields().get(i);
-            int rowY = TOP + i * ROW_HEIGHT;
+            int rowY = TOP + i * rowHeight;
             int color = i == activeField ? 0xFFFFFF55 : 0xFFE0E0E0;
             graphics.text(font, fieldLabel(field), LABEL_X, rowY + 6, color);
-            Component note = note(i);
+            Component note = noteOffset > 20 ? note(i) : null;
             if (note != null) {
-                graphics.text(font, font.plainSubstrByWidth(note.getString(), boxes.get(i).getWidth()), BOX_X + 2, rowY + 23, 0xFF909090);
+                graphics.text(font, font.plainSubstrByWidth(note.getString(), boxes.get(i).getWidth()), BOX_X + 2, rowY + noteOffset, 0xFF909090);
             }
             if (mouseX >= LABEL_X && mouseX < BOX_X && mouseY >= rowY && mouseY < rowY + 20) {
                 graphics.setTooltipForNextFrame(font.split(help(field), 200), mouseX, mouseY);
@@ -219,7 +227,7 @@ final class RuleEditScreen extends Screen {
                 : Component.translatable("mobsettings.ui.pickHint");
         graphics.text(font, header, width / 2 + 10, 40, 0xFFA0A0A0);
         if (error != null) {
-            graphics.textWithWordWrap(font, Component.literal(error), LABEL_X, TOP + type.fields().size() * ROW_HEIGHT,
+            graphics.textWithWordWrap(font, Component.literal(error), LABEL_X, TOP + type.fields().size() * rowHeight,
                     width / 2 - 30, 0xFFFF5555);
         }
     }

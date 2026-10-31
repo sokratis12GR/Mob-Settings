@@ -1,10 +1,11 @@
 {
   "homepage": "https://www.curseforge.com/minecraft/mc-mods/mob-settings",
   "promos": {
-    "26.3-latest": "1.0",
-    "26.3-recommended": "1.0"
+    "26.3-latest": "1.2.0",
+    "26.3-recommended": "1.2.0"
   },
   "26.3": {
-    "1.0": "Ported to Minecraft 26.3."
+    "1.0": "Ported to Minecraft 26.3.",
+    "1.2.0": "## New features\n\n- **Per-dimension spawn rules**: `addSpawns` and `removeSpawns` now take a dimension after the entity, so the same biome can be configured differently in each dimension (e.g. a modded dimension that reuses vanilla biomes).\n  - Format: `entity_id|dimension_id|biome|weight|min_group|max_group` and `entity_id|dimension_id|biome` or `entity_id|dimension_id|biome|percent`.\n  - Use `*` as the dimension for every dimension. Old lines without a dimension still work and apply to every dimension; the config screen upgrades them when you edit them.\n  - Example: `minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10|1|3`\n- **Biome tags**: anywhere a biome is asked for, a biome tag works too, e.g. `#minecraft:is_nether` or `#c:is_forest`. The config screen lists the available tags after the biomes.\n\n## Changes\n\n- **Remove runs before add**: `removeSpawns` now runs before `addSpawns`, so your own added spawns are never removed. `*|*|*` plus a few `addSpawns` lines leaves only those mobs spawning. `removeDrops` already ran before `extraDrops`; both are now listed in that order in the config file and screen, with comments explaining it.\n- Rules for every dimension are applied first; rules for one dimension are applied on top of them, removing before adding as well.\n- A line for a specific mob now wins over a `*` line in `attributeOverrides` (same attribute) and `despawnRanges`, regardless of order.\n- Invalid config entries are logged as a warning with the reason, instead of being skipped silently.\n- Config rules are parsed once per config load instead of on every drop, spawn and despawn check.\n- The entry editor fits rules with many fields on smaller screens.\n\n## Fixes\n\n- Raising `minecraft:max_health` with `attributeOverrides` now spawns mobs at full health instead of their old maximum (e.g. 20/40).\n\n## Notes\n\n- Spawn rules for one dimension only apply to spawning after chunks generate, since a biome can be shared by several dimensions. Rules for every dimension (`*`) also affect animals placed during chunk generation.\n- Spawn rules for every dimension don't affect structure spawns (fortresses, ocean monuments, witch huts, pillager outposts); rules for one dimension do. Neither affects spawner blocks.\n- `removeDrops` also removes equipment and items a mob picked up.\n"
   }
 }
