@@ -43,18 +43,12 @@ neoForge {
         gameTestServer {
             type = 'gameTestServer'
         }
-        clientData {
-            clientData()
+
+        data {
+            data()
             programArguments.addAll '--mod', mod_id,
                     '--all',
                     '--output', file('src/generated/client').absolutePath,
-                    '--existing', file('src/main/resources').absolutePath
-        }
-        serverData {
-            serverData()
-            programArguments.addAll '--mod', mod_id,
-                    '--all',
-                    '--output', file('src/generated/server').absolutePath,
                     '--existing', file('src/main/resources').absolutePath
         }
     }
