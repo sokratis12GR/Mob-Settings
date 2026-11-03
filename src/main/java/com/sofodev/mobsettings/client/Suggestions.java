@@ -106,7 +106,7 @@ final class Suggestions {
     }
 
     private static Holder<Attribute> attribute(String id) {
-        return BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation.parse(id)).orElseThrow();
+        return BuiltInRegistries.ATTRIBUTE.getHolder(new ResourceLocation(id)).orElseThrow();
     }
 
     private static boolean isAttribute(String id) {

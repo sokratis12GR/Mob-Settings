@@ -27,7 +27,7 @@ public final class MSConfig {
                 "Note: this also removes equipment and items the mob picked up (e.g. a player's gear a zombie grabbed).",
                 "Example: minecraft:zombie|minecraft:rotten_flesh",
                 "Example: minecraft:skeleton|minecraft:bone|0.5")
-                .defineListAllowEmpty("removeDrops", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("removeDrops", List.of(), o -> o instanceof String);
         DROP_ONLY_ON_PLAYER_KILL = b.comment("Require a player credited with the kill to award configured extra drops.")
                 .define("dropOnlyOnPlayerKill", true);
         EXTRA_DROPS = b.comment(
@@ -35,7 +35,7 @@ public final class MSConfig {
                 "Use * as the entity ID to affect ALL living entities (including other mods).",
                 "Example: minecraft:zombie|minecraft:diamond|2|0.5",
                 "Example: othermod:boss|minecraft:nether_star|1|1.0")
-                .defineListAllowEmpty("extraDrops", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("extraDrops", List.of(), o -> o instanceof String);
         REMOVE_SPAWNS = b.comment(
                 "Remove natural spawns: entity_id|dimension_id|biome or entity_id|dimension_id|biome|percent.",
                 "Without percent the spawn is removed entirely; with percent (0-100) its spawn weight is reduced by that much.",
@@ -52,7 +52,7 @@ public final class MSConfig {
                 "Example: minecraft:zombie|*|*|50",
                 "Example: minecraft:zombie|minecraft:overworld|#minecraft:is_forest")
                 .worldRestart()
-                .defineListAllowEmpty("removeSpawns", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("removeSpawns", List.of(), o -> o instanceof String);
         ADD_SPAWNS = b.comment(
                 "Add natural spawns, after removeSpawns: entity_id|dimension_id|biome|weight|min_group|max_group.",
                 "Use * as the dimension ID for every dimension, or as the biome for every biome. Biome tags (#...) work too.",
@@ -64,7 +64,7 @@ public final class MSConfig {
                 "Example: othermod:forest_beast|*|minecraft:forest|20|1|2",
                 "Example: minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10|1|3")
                 .worldRestart()
-                .defineListAllowEmpty("addSpawns", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("addSpawns", List.of(), o -> o instanceof String);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",
@@ -98,18 +98,18 @@ public final class MSConfig {
                 "  minecraft:zombie.spawn_reinforcements (0 to 1) - zombies and zombified piglins",
                 "",
                 "Example: minecraft:zombie|minecraft:generic.max_health|40")
-                .defineListAllowEmpty("attributeOverrides", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("attributeOverrides", List.of(), o -> o instanceof String);
         DESPAWN_RANGES = b.comment(
                 "Override natural despawn distance (in blocks from the nearest player): entity_id|range.",
                 "Entities closer than range are kept loaded; entities farther are force-despawned.",
                 "A line for a specific mob wins over a * line.",
                 "Example: minecraft:zombie|32")
-                .defineListAllowEmpty("despawnRanges", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("despawnRanges", List.of(), o -> o instanceof String);
         LIGHT_SPAWN_RESTRICTIONS = b.comment(
                 "Restrict natural spawning to a light level range: entity_id|minLight|maxLight (0-15).",
                 "Cancels the spawn if the block's light level falls outside the range.",
                 "Example: minecraft:zombie|0|7")
-                .defineListAllowEmpty("lightSpawnRestrictions", List.of(), () -> "", o -> o instanceof String);
+                .defineListAllowEmpty("lightSpawnRestrictions", List.of(), o -> o instanceof String);
         SPEC = b.build();
     }
 }

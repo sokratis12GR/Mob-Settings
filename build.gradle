@@ -38,7 +38,7 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
-            programArguments.addAll '--world', 'world-1.21.1'
+            programArguments.addAll '--world', 'world-1.20.6'
         }
         gameTestServer {
             type = 'gameTestServer'

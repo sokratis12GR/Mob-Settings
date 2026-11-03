@@ -11,7 +11,7 @@ authors="${mod_authors}"
 description='''${mod_description}'''
 logoFile="mob_settings.png"
 displayURL = "https://www.curseforge.com/minecraft/mc-mods/mob-settings" #optional
-updateJSONURL = "https://sokratis.space/mobsettings/1.21.1/update.json" #optional
+updateJSONURL = "https://sokratis.space/mobsettings/1.20.6/update.json" #optional
 
 [[dependencies.mobsettings]]
 modId="neoforge"
