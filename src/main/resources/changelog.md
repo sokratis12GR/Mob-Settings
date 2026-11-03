@@ -1,6 +1,6 @@
-## Mob Settings for Minecraft 1.21.1 (NeoForge)
+## Mob Settings for Minecraft 1.20.6 (NeoForge)
 
-The first release of Mob Settings for 1.21.1. Every option starts empty, so the mod does nothing until you configure it.
+The first release of Mob Settings for 1.20.6. Every option starts empty, so the mod does nothing until you configure it.
 
 ## Features
 
@@ -55,4 +55,4 @@ The first release of Mob Settings for 1.21.1. Every option starts empty, so the 
 - Spawn rules for one dimension only apply to spawning after chunks generate, since a biome can be shared by several dimensions. Rules for every dimension (`*`) also affect animals placed during chunk generation.
 - Spawn rules for every dimension don't affect structure spawns (fortresses, ocean monuments, witch huts, pillager outposts); rules for one dimension do. Neither affects spawner blocks.
 - `removeDrops` also removes equipment and items a mob picked up.
-- On 1.21.1, attribute IDs include their category prefix, e.g. `minecraft:generic.max_health` or `minecraft:zombie.spawn_reinforcements`.
+- On 1.20.6, attribute IDs include their category prefix, e.g. `minecraft:generic.max_health` or `minecraft:zombie.spawn_reinforcements`.
