@@ -21,6 +21,7 @@ public final class MobSettings {
         NeoForge.EVENT_BUS.addListener(MobExperience::onExperienceDrop);
         NeoForge.EVENT_BUS.addListener(MobDespawn::onMobDespawn);
         NeoForge.EVENT_BUS.addListener(MobSpawnLight::onFinalizeSpawn);
+        NeoForge.EVENT_BUS.addListener(MobSpawns::onFinalizeSpawn);
         // Low priority so dimension rules also see spawns other mods add through this event.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onPotentialSpawns);
         // Low priority so a result set by another mod is left alone.

@@ -21,6 +21,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import net.neoforged.neoforge.common.world.MobSpawnSettingsBuilder;
+import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -102,6 +103,42 @@ public final class MobSpawns implements BiomeModifier {
                     ? MobSpawnEvent.PositionCheck.Result.SUCCEED
                     : MobSpawnEvent.PositionCheck.Result.FAIL);
         }
+    }
+
+    /**
+     * Phantoms, cats, patrols, the wandering trader, sieges and raids are spawned by code instead of a biome's spawn
+     * list, so removal rules reach them here. A partial percent only rolls for patrols and events: natural spawns
+     * already had their weight cut, and rolling again would cut it twice.
+     */
+    public static void onFinalizeSpawn(FinalizeSpawnEvent event) {
+        EntitySpawnReason reason = event.getSpawnType();
+        boolean rolls = reason == EntitySpawnReason.EVENT || reason == EntitySpawnReason.PATROL;
+        if (!rolls && reason != EntitySpawnReason.NATURAL) return;
+        EntityType<?> type = event.getEntity().getType();
+        ServerLevelAccessor level = event.getLevel();
+        Identifier dimension = level.getLevel().dimension().identifier();
+        BlockPos pos = BlockPos.containing(event.getX(), event.getY(), event.getZ());
+        Holder<Biome> biome = null;
+        double keep = 1;
+        boolean matched = false;
+        for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
+            if (!Rules.matches(rule.entity(), type) || !Rules.matches(rule.dimension(), dimension)) continue;
+            if (rule.keep() > 0 && !rolls) continue;
+            if (biome == null) biome = level.getBiome(pos);
+            if (!rule.biome().matches(biome)) continue;
+            keep *= rule.keep();
+            matched = true;
+        }
+        if (!matched || isAdded(type, dimension, biome)) return;
+        if (keep <= 0 || event.getEntity().getRandom().nextDouble() >= keep) event.setSpawnCancelled(true);
+    }
+
+    /** Whether an addSpawns line covers the mob here, since added spawns are never removed. */
+    private static boolean isAdded(EntityType<?> type, Identifier dimension, Holder<Biome> biome) {
+        for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+            if (rule.entity() == type && Rules.matches(rule.dimension(), dimension) && rule.biome().matches(biome)) return true;
+        }
+        return false;
     }
 
     private static boolean isNaturalSpawn(EntitySpawnReason reason) {
