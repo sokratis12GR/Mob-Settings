@@ -147,6 +147,11 @@ final class RuleEditScreen extends Screen {
         if (field.wildcard() && "*".contains(query)) {
             matches.add(new Suggestions.Option("*", Suggestions.anyLabel(field.kind()).getString()));
         }
+        if (field.wildcard()) {
+            for (Suggestions.Option option : Suggestions.selectors(field.kind())) {
+                if (option.matches(query)) matches.add(option);
+            }
+        }
         for (Suggestions.Option option : Suggestions.options(field.kind(), entityContext)) {
             if (option.matches(query)) matches.add(option);
         }

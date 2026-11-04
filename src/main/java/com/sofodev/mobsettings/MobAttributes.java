@@ -21,9 +21,9 @@ public final class MobAttributes {
         if (firstJoin) data.putString(SPAWN_DIMENSION, living.level().dimension().identifier().toString());
         String spawnDimension = data.getStringOr(SPAWN_DIMENSION, "");
         boolean maxHealthChanged = false;
-        // Less specific rules go first so the most specific rule wins for the same attribute: * then this mob,
-        // and within those, every dimension then this dimension.
-        for (int pass = 0; pass < 4; pass++) {
+        // Less specific rules go first so the most specific rule wins for the same attribute: *, then a mod, then a
+        // tag, then this mob, and within those, every dimension then this dimension.
+        for (int pass = 0; pass < 8; pass++) {
             for (Rules.AttributeOverride rule : Rules.ATTRIBUTE_OVERRIDES.get()) {
                 if (specificity(rule) != pass || !Rules.matchesMob(rule.entity(), living.getType())) continue;
                 if (rule.dimension() != null && !rule.dimension().toString().equals(spawnDimension)) continue;
@@ -39,6 +39,6 @@ public final class MobAttributes {
     }
 
     private static int specificity(Rules.AttributeOverride rule) {
-        return (rule.entity() != null ? 2 : 0) + (rule.dimension() != null ? 1 : 0);
+        return rule.entity().specificity() * 2 + (rule.dimension() != null ? 1 : 0);
     }
 }

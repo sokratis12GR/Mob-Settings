@@ -152,6 +152,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         if (value.isEmpty()) return field.optional() ? null : "mobsettings.ui.error.required";
         if (field.isPicker()) {
             if (value.equals("*")) return field.wildcard() ? null : "mobsettings.ui.error.noWildcard";
+            if (Suggestions.isSelector(field.kind(), value) && !field.wildcard()) return "mobsettings.ui.error.noWildcard";
             return Suggestions.isKnown(field.kind(), value) ? null : "mobsettings.ui.error.unknownId";
         }
         if (field.kind() == Kind.FLAG) {

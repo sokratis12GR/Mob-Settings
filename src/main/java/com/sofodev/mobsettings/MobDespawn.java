@@ -10,14 +10,12 @@ public final class MobDespawn {
 
     public static void onMobDespawn(MobDespawnEvent event) {
         Mob mob = event.getEntity();
-        // A rule naming this mob wins over a * rule, wherever they are in the list.
+        // The most specific rule wins, wherever they are in the list: this mob, then a tag, then a mod, then *.
+        // Between equally specific rules the first one wins.
         Rules.DespawnRange match = null;
         for (Rules.DespawnRange rule : Rules.DESPAWN_RANGES.get()) {
-            if (rule.entity() == mob.getType()) {
-                match = rule;
-                break;
-            }
-            if (rule.entity() == null && match == null) match = rule;
+            if (!Rules.matchesMob(rule.entity(), mob.getType())) continue;
+            if (match == null || rule.entity().specificity() > match.entity().specificity()) match = rule;
         }
         if (match == null) return;
         Player nearest = mob.level().getNearestPlayer(mob, -1);

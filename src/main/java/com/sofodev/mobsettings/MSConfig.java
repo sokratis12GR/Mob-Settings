@@ -28,7 +28,14 @@ public final class MSConfig {
                 "Used to upgrade this file when the format changes. Don't edit this.",
                 "",
                 "In the lists below, fields in [brackets] are optional. Leave them off the end of a line, or write ? to",
-                "skip one and set a later field. IDs without a namespace use minecraft, so zombie means minecraft:zombie.")
+                "skip one and set a later field. IDs without a namespace use minecraft, so zombie means minecraft:zombie.",
+                "",
+                "Wherever a list takes an entity_id (except the mob in addSpawns), it can also be:",
+                "  *            every mob (players are never included)",
+                "  modid:*      every mob from one mod, e.g. minecraft:* or othermod:*",
+                "  #tag         every mob in an entity type tag, e.g. #minecraft:skeletons or #c:bosses",
+                "In attributeOverrides, experienceModifiers and despawnRanges only the narrowest line applies to a mob:",
+                "its own ID, then a tag, then modid:*, then *. The other lists apply every line that matches.")
                 .defineInRange("configVersion", 1, 1, Integer.MAX_VALUE);
         REMOVE_DROPS = b.comment(
                 "Remove drops from a mob before they spawn: entity_id|item_id|[chance].",
