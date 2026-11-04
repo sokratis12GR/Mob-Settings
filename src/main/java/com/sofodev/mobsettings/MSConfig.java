@@ -15,6 +15,7 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ADD_SPAWNS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_SPAWNS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_DROPS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> GROUP_SIZES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ATTRIBUTE_OVERRIDES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DESPAWN_RANGES;
@@ -101,6 +102,17 @@ public final class MSConfig {
                 "Example: minecraft:cow|minecraft:overworld|#minecraft:is_forest|10|2|4|T")
                 .worldRestart()
                 .defineListAllowEmpty("addSpawns", List.of(), () -> "", o -> o instanceof String);
+        GROUP_SIZES = b.comment(
+                "Change how many mobs spawn together in the spawns that already exist: entity_id|[dimension_id]|[biome]|min_group|[max_group].",
+                "Max group defaults to the min group. Dimension and biome default to all of them, the same as writing *.",
+                "Biome tags (#...) work too, and a single ID after the entity is the biome, as in removeSpawns.",
+                "Runs after removeSpawns and before addSpawns, so spawns you add keep the group size you gave them.",
+                "Rules for every dimension (*) edit the biomes themselves; rules for one dimension edit the spawn list as",
+                "mobs spawn, the same as in removeSpawns. The weight is unchanged, and so is any spawn the mob doesn't have.",
+                "Example: minecraft:zombie|1|1",
+                "Example: minecraft:sheep|minecraft:overworld|#minecraft:is_forest|4|8")
+                .worldRestart()
+                .defineListAllowEmpty("spawnGroupSizes", List.of(), () -> "", o -> o instanceof String);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|[dimension_id]|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",

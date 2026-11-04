@@ -10,6 +10,8 @@
 - `attributeOverrides` now apply as a modifier instead of replacing the base value, so removing a line takes the change off a mob the next time it loads. Mobs saved by an older version keep the value they were given.
 - `removeDrops` and `extraDrops` take an optional dimension at the end, where the mob dies. `despawnRanges` takes an optional dimension, and `lightSpawnRestrictions` an optional dimension and biome. Existing lines keep working.
   - Example: `minecraft:skeleton|minecraft:bone|?|minecraft:the_nether`
+- New `spawnGroupSizes` list changes how many of a mob spawn together in the spawns that already exist: `entity_id|[dimension_id]|[biome]|min_group|[max_group]`.
+  - Example: `minecraft:zombie|1|1`
 
 ## Fixes
 

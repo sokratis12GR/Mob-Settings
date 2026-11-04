@@ -25,6 +25,11 @@ public final class SpawnLines {
         return withLocation(line, 4);
     }
 
+    /** {@code entity|[dimension]|[biome]|min_group|[max_group]} */
+    public static String groupSize(String line) {
+        return withLocation(line, 5);
+    }
+
     /** {@code entity|[dimension]|attribute|value} */
     public static String attribute(String line) {
         return pad(fieldCount(line) == 3 ? insertDimension(line, DEFAULT) : line, 4);
