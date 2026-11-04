@@ -1,5 +1,6 @@
 ## Changes
 
+- `despawnRanges` no longer removes persistent mobs, such as name-tagged ones or ones set to never despawn.
 - `addSpawns` mobs now ignore their usual spawn rules (such as ground type and light level) wherever the line applies, so a chicken added to the Nether really spawns there. This also applies to that mob's existing spawns in those places. End a line with `T` to keep the usual rules: `entity_id|[dimension_id]|[biome]|weight|[min_group]|[max_group]|T`.
   - Example: `minecraft:cow|minecraft:overworld|#minecraft:is_forest|10|2|4|T`
 - `*` in `attributeOverrides` no longer affects players. Add a `minecraft:player` line to change their attributes.
