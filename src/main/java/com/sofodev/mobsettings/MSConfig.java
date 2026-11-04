@@ -17,6 +17,7 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_DROPS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> GROUP_SIZES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ATTRIBUTE_OVERRIDES;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> DAMAGE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DESPAWN_RANGES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LIGHT_SPAWN_RESTRICTIONS;
@@ -159,6 +160,19 @@ public final class MSConfig {
                 "Example: minecraft:zombie|minecraft:max_health|40",
                 "Example: minecraft:zombie|minecraft:the_nether|minecraft:attack_damage|6")
                 .defineListAllowEmpty("attributeOverrides", List.of(), () -> "", o -> o instanceof String);
+        DAMAGE_MODIFIERS = b.comment(
+                "Multiply the damage a mob deals and takes: entity_id|[dealt]|[taken]|[dimension_id] (0 to 1000).",
+                "Dealt scales the damage the mob causes, including arrows and other projectiles it shoots. Taken scales the damage it receives.",
+                "Leave one off or write ? to keep it as it is, but set at least one. 0 means no damage; 2 doubles it.",
+                "Dimension is where the damage happens and defaults to every dimension. Use * for every mob except players",
+                "(use minecraft:player for them).",
+                "For each of dealt and taken only the narrowest line that sets it applies: its own ID, then a tag, then",
+                "modid:*, then *, and for the same mob a line for one dimension beats a line for every dimension.",
+                "This changes the damage before armor and enchantments reduce it.",
+                "Example: minecraft:zombie|1.5",
+                "Example: minecraft:zombie|?|0.5|minecraft:the_nether",
+                "Example: minecraft:player|?|2")
+                .defineListAllowEmpty("damageModifiers", List.of(), () -> "", o -> o instanceof String);
         EXPERIENCE_MODIFIERS = b.comment(
                 "Multiply the experience a mob drops: entity_id|[dimension_id]|multiplier (0 to 1000; 0 means no experience).",
                 "Use * as the entity ID for every mob except players (use minecraft:player for them).",

@@ -33,6 +33,7 @@ final class Rules {
     record RemoveSpawn(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
     record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
     record GroupSize(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, int min, int max) {}
+    record DamageModifier(EntityRule entity, @Nullable Double dealt, @Nullable Double taken, @Nullable Identifier dimension) {}
     record AttributeOverride(EntityRule entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
     record ExperienceModifier(EntityRule entity, @Nullable Identifier dimension, double multiplier) {}
     record DespawnRange(EntityRule entity, double range, @Nullable Identifier dimension) {}
@@ -111,6 +112,13 @@ final class Rules {
         Attribute attribute = registered(BuiltInRegistries.ATTRIBUTE, f[2], "attribute");
         return new AttributeOverride(entity(f[0]), dimension(f[1]), BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute),
                 decimal(f[3], "value", -Double.MAX_VALUE, Double.MAX_VALUE));
+    });
+    static final Cache<DamageModifier> DAMAGE_MODIFIERS = new Cache<>("damageModifiers", MSConfig.DAMAGE_MODIFIERS, line -> {
+        String[] f = fields(SpawnLines.pad(line, 4), 4, 4);
+        Double dealt = SpawnLines.isDefault(f[1]) ? null : decimal(f[1], "dealt", 0, 1000);
+        Double taken = SpawnLines.isDefault(f[2]) ? null : decimal(f[2], "taken", 0, 1000);
+        if (dealt == null && taken == null) throw new Invalid("sets neither damage dealt nor damage taken");
+        return new DamageModifier(entity(f[0]), dealt, taken, dimension(f[3]));
     });
     static final Cache<ExperienceModifier> EXPERIENCE_MODIFIERS = new Cache<>("experienceModifiers", MSConfig.EXPERIENCE_MODIFIERS, line -> {
         String[] f = fields(SpawnLines.experience(line), 3, 3);
