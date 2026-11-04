@@ -131,10 +131,12 @@ public final class MobSpawns implements BiomeModifier {
         }
     }
 
-    /** The entry with its weight cut by the rule's percent, or null once nothing is left. */
+    /** The entry with its weight cut by the rule's percent, or null only when the rule removes all of it. */
     private static @Nullable Weighted<MobSpawnSettings.SpawnerData> reduced(Weighted<MobSpawnSettings.SpawnerData> entry, Rules.RemoveSpawn rule) {
-        int weight = (int) Math.round(entry.weight() * rule.keep());
-        return weight > 0 ? new Weighted<>(entry.value(), weight) : null;
+        if (rule.keep() <= 0) return null;
+        // A partial cut never rounds a small weight down to nothing.
+        int weight = Math.max(1, (int) Math.round(entry.weight() * rule.keep()));
+        return new Weighted<>(entry.value(), weight);
     }
 
     private static MobSpawnSettings.SpawnerData spawnerData(Rules.AddSpawn rule) {

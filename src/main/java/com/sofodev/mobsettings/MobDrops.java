@@ -18,17 +18,19 @@ public final class MobDrops {
 
     public static void onLivingDrops(LivingDropsEvent event) {
         LivingEntity entity = event.getEntity();
+        // A player's death drops are their own items, so no rule may touch them.
+        if (entity instanceof Player) return;
         EntityType<?> type = entity.getType();
         // Removal runs first so extra drops are never stripped, e.g. "*|*" plus a few extra drops replaces all loot.
         for (Rules.RemoveDrop rule : Rules.REMOVE_DROPS.get()) {
-            if (!Rules.matches(rule.entity(), type)) continue;
+            if (!Rules.matchesMob(rule.entity(), type)) continue;
             event.getDrops().removeIf(itemEntity ->
                     (rule.item() == null || itemEntity.getItem().is(rule.item()))
                             && entity.getRandom().nextDouble() < rule.chance());
         }
         if (MSConfig.DROP_ONLY_ON_PLAYER_KILL.get() && !(event.getSource().getEntity() instanceof Player)) return;
         for (Rules.ExtraDrop rule : Rules.EXTRA_DROPS.get()) {
-            if (!Rules.matches(rule.entity(), type) || entity.getRandom().nextDouble() >= rule.chance()) continue;
+            if (!Rules.matchesMob(rule.entity(), type) || entity.getRandom().nextDouble() >= rule.chance()) continue;
             int remaining = rule.count() + (rule.looting() ? lootingBonus(event) : 0);
             while (remaining > 0) {
                 int size = Math.min(remaining, rule.item().getDefaultMaxStackSize());
