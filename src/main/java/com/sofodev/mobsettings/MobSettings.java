@@ -18,11 +18,15 @@ public final class MobSettings {
         modBus.addListener(ModConfigEvent.Reloading.class, MSConfig::upgrade);
         NeoForge.EVENT_BUS.addListener(MobDrops::onLivingDrops);
         NeoForge.EVENT_BUS.addListener(MobAttributes::onEntityJoinLevel);
+        // After attributes, so a mob's data is merged over what they set.
+        NeoForge.EVENT_BUS.addListener(MobSpawnData::onEntityJoinLevel);
         NeoForge.EVENT_BUS.addListener(MobExperience::onExperienceDrop);
         NeoForge.EVENT_BUS.addListener(MobDamage::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(MobDespawn::onMobDespawn);
         NeoForge.EVENT_BUS.addListener(MobSpawnLight::onFinalizeSpawn);
         NeoForge.EVENT_BUS.addListener(MobSpawns::onFinalizeSpawn);
+        // Low priority so a spawn another listener cancels isn't given data.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawnData::onFinalizeSpawn);
         // Low priority so dimension rules also see spawns other mods add through this event.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onPotentialSpawns);
         // Low priority so a result set by another mod is left alone.

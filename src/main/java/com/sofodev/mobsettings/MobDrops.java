@@ -33,12 +33,13 @@ public final class MobDrops {
         if (MSConfig.DROP_ONLY_ON_PLAYER_KILL.get() && !(event.getSource().getEntity() instanceof Player)) return;
         for (Rules.ExtraDrop rule : Rules.EXTRA_DROPS.get()) {
             if (!Rules.matchesMob(rule.entity(), type) || !Rules.matches(rule.dimension(), dimension) || entity.getRandom().nextDouble() >= rule.chance()) continue;
+            ItemStack stack = rule.template() == null ? new ItemStack(rule.item()) : rule.template().create(entity.level().registryAccess());
+            if (stack == null) continue;
             int remaining = rule.count() + (rule.looting() ? lootingBonus(event) : 0);
             while (remaining > 0) {
-                int size = Math.min(remaining, rule.item().getDefaultMaxStackSize());
+                int size = Math.min(remaining, stack.getMaxStackSize());
                 if (size <= 0) break;
-                event.getDrops().add(new ItemEntity(entity.level(), entity.getX(), entity.getY(), entity.getZ(),
-                        new ItemStack(rule.item(), size)));
+                event.getDrops().add(new ItemEntity(entity.level(), entity.getX(), entity.getY(), entity.getZ(), stack.copyWithCount(size)));
                 remaining -= size;
             }
         }

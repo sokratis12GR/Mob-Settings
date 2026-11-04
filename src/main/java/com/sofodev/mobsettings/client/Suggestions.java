@@ -27,6 +27,7 @@ import net.minecraft.world.entity.ai.attributes.RangedAttribute;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
 import net.neoforged.fml.ModList;
@@ -40,7 +41,7 @@ final class Suggestions {
         }
     }
 
-    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes, entitySelectors;
+    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes, entitySelectors, vanillaEnchantments, dataComponents;
 
     private Suggestions() {}
 
@@ -133,6 +134,42 @@ final class Suggestions {
         return sorted(BuiltInRegistries.ITEM.stream()
                 .filter(item -> item != Items.AIR)
                 .map(item -> new Option(BuiltInRegistries.ITEM.getKey(item).toString(), itemName(item))));
+    }
+
+    /** The enchantments the server told us about when in a world, otherwise the vanilla ones. */
+    static List<Option> enchantments() {
+        var level = Minecraft.getInstance().level;
+        if (level != null) {
+            return sorted(level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).listElementIds().map(key -> enchantmentOption(key.identifier())));
+        }
+        if (vanillaEnchantments == null) {
+            List<Option> found = new ArrayList<>();
+            for (Field field : Enchantments.class.getFields()) {
+                if (!Modifier.isStatic(field.getModifiers()) || field.getType() != ResourceKey.class) continue;
+                try {
+                    found.add(enchantmentOption(((ResourceKey<?>) field.get(null)).identifier()));
+                } catch (IllegalAccessException ignored) {}
+            }
+            vanillaEnchantments = sorted(found.stream());
+        }
+        return vanillaEnchantments;
+    }
+
+    private static Option enchantmentOption(Identifier id) {
+        return new Option(id.toString(), Component.translatable("enchantment." + id.getNamespace() + "." + id.getPath()).getString());
+    }
+
+    /** Components that are saved with an item, except the ones the item editor has its own inputs for. */
+    static List<Option> dataComponents() {
+        if (dataComponents == null) {
+            List<String> own = List.of(ItemLine.DAMAGE, ItemLine.NAME, ItemLine.UNBREAKABLE, ItemLine.ENCHANTMENTS);
+            dataComponents = sorted(BuiltInRegistries.DATA_COMPONENT_TYPE.stream()
+                    .filter(type -> !type.isTransient())
+                    .map(type -> BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(type).toString())
+                    .filter(id -> !own.contains(id))
+                    .map(id -> new Option(id, id)));
+        }
+        return dataComponents;
     }
 
     // Item stacks need data components, which aren't bound on the title screen, so translate the ID directly.
