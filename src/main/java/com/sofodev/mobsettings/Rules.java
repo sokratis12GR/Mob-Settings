@@ -28,14 +28,14 @@ import org.slf4j.Logger;
 final class Rules {
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    record RemoveDrop(EntityRule entity, @Nullable Item item, double chance) {}
-    record ExtraDrop(EntityRule entity, Item item, int count, double chance, boolean looting) {}
+    record RemoveDrop(EntityRule entity, @Nullable Item item, double chance, @Nullable Identifier dimension) {}
+    record ExtraDrop(EntityRule entity, Item item, int count, double chance, boolean looting, @Nullable Identifier dimension) {}
     record RemoveSpawn(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
     record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
     record AttributeOverride(EntityRule entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
     record ExperienceModifier(EntityRule entity, @Nullable Identifier dimension, double multiplier) {}
-    record DespawnRange(EntityRule entity, double range) {}
-    record LightRestriction(EntityRule entity, int min, int max) {}
+    record DespawnRange(EntityRule entity, double range, @Nullable Identifier dimension) {}
+    record LightRestriction(EntityRule entity, int min, int max, @Nullable Identifier dimension, BiomeRule biome) {}
 
     /**
      * Which entities a rule covers: one entity type, an {@code #entity_type_tag}, every entity of a mod
@@ -70,16 +70,16 @@ final class Rules {
     }
 
     static final Cache<RemoveDrop> REMOVE_DROPS = new Cache<>("removeDrops", MSConfig.REMOVE_DROPS, line -> {
-        String[] f = fields(SpawnLines.pad(line, 3), 3, 3);
+        String[] f = fields(SpawnLines.pad(line, 4), 4, 4);
         Item item = f[1].equals("*") ? null : registered(BuiltInRegistries.ITEM, f[1], "item");
-        return new RemoveDrop(entity(f[0]), item, SpawnLines.isDefault(f[2]) ? 1 : decimal(f[2], "chance", 0, 1));
+        return new RemoveDrop(entity(f[0]), item, SpawnLines.isDefault(f[2]) ? 1 : decimal(f[2], "chance", 0, 1), dimension(f[3]));
     });
     static final Cache<ExtraDrop> EXTRA_DROPS = new Cache<>("extraDrops", MSConfig.EXTRA_DROPS, line -> {
-        String[] f = fields(SpawnLines.pad(line, 5), 5, 5);
+        String[] f = fields(SpawnLines.pad(line, 6), 6, 6);
         return new ExtraDrop(entity(f[0]), registered(BuiltInRegistries.ITEM, f[1], "item"),
                 SpawnLines.isDefault(f[2]) ? 1 : integer(f[2], "count", 1, 100000),
                 SpawnLines.isDefault(f[3]) ? 1 : decimal(f[3], "chance", 0, 1),
-                !SpawnLines.isDefault(f[4]) && flag(f[4], "looting"));
+                !SpawnLines.isDefault(f[4]) && flag(f[4], "looting"), dimension(f[5]));
     });
     static final Cache<RemoveSpawn> REMOVE_SPAWNS = new Cache<>("removeSpawns", MSConfig.REMOVE_SPAWNS, line -> {
         String[] f = fields(SpawnLines.removeSpawn(line), 4, 4);
@@ -109,17 +109,17 @@ final class Rules {
         return new ExperienceModifier(entity(f[0]), dimension(f[1]), decimal(f[2], "multiplier", 0, 1000));
     });
     static final Cache<DespawnRange> DESPAWN_RANGES = new Cache<>("despawnRanges", MSConfig.DESPAWN_RANGES, line -> {
-        String[] f = fields(line, 2, 2);
+        String[] f = fields(SpawnLines.pad(line, 3), 3, 3);
         double range = decimal(f[1], "range", 0, Double.MAX_VALUE);
         if (range <= 0) throw new Invalid("range must be above 0");
-        return new DespawnRange(entity(f[0]), range);
+        return new DespawnRange(entity(f[0]), range, dimension(f[2]));
     });
     static final Cache<LightRestriction> LIGHT_SPAWN_RESTRICTIONS = new Cache<>("lightSpawnRestrictions", MSConfig.LIGHT_SPAWN_RESTRICTIONS, line -> {
-        String[] f = fields(SpawnLines.pad(line, 3), 3, 3);
+        String[] f = fields(SpawnLines.pad(line, 5), 5, 5);
         int min = SpawnLines.isDefault(f[1]) ? 0 : integer(f[1], "min light", 0, 15);
         int max = SpawnLines.isDefault(f[2]) ? 15 : integer(f[2], "max light", 0, 15);
         if (max < min) throw new Invalid("max light is lower than min light");
-        return new LightRestriction(entity(f[0]), min, max);
+        return new LightRestriction(entity(f[0]), min, max, dimension(f[3]), biome(f[4]));
     });
 
     private Rules() {}

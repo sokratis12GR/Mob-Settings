@@ -1,10 +1,11 @@
 package com.sofodev.mobsettings;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 
-/** Restricts natural spawning of registry-ID-matched entities to a configured light-level range. */
+/** Restricts natural spawning of registry-ID-matched entities to a configured light-level range, optionally per dimension and biome. */
 public final class MobSpawnLight {
     private MobSpawnLight() {}
 
@@ -12,9 +13,11 @@ public final class MobSpawnLight {
         // The event also fires for spawn eggs, commands, spawners, breeding etc., which should stay unaffected.
         EntitySpawnReason reason = event.getSpawnType();
         if (reason != EntitySpawnReason.NATURAL && reason != EntitySpawnReason.CHUNK_GENERATION) return;
+        Identifier dimension = event.getLevel().getLevel().dimension().identifier();
+        BlockPos pos = BlockPos.containing(event.getX(), event.getY(), event.getZ());
         for (Rules.LightRestriction rule : Rules.LIGHT_SPAWN_RESTRICTIONS.get()) {
-            if (!Rules.matchesMob(rule.entity(), event.getEntity().getType())) continue;
-            BlockPos pos = BlockPos.containing(event.getX(), event.getY(), event.getZ());
+            if (!Rules.matchesMob(rule.entity(), event.getEntity().getType()) || !Rules.matches(rule.dimension(), dimension)) continue;
+            if (!rule.biome().matches(event.getLevel().getBiome(pos))) continue;
             int light = event.getLevel().getMaxLocalRawBrightness(pos);
             if (light < rule.min() || light > rule.max()) {
                 event.setSpawnCancelled(true);

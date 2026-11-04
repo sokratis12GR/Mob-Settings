@@ -38,24 +38,27 @@ public final class MSConfig {
                 "its own ID, then a tag, then modid:*, then *. The other lists apply every line that matches.")
                 .defineInRange("configVersion", 1, 1, Integer.MAX_VALUE);
         REMOVE_DROPS = b.comment(
-                "Remove drops from a mob before they spawn: entity_id|item_id|[chance].",
+                "Remove drops from a mob when it dies: entity_id|item_id|[chance]|[dimension_id].",
                 "Runs before extraDrops, so extra drops are never removed. For example, \"*|*\" plus a few",
                 "extraDrops entries replaces every mob's drops with only those items.",
-                "Chance (0.0 to 1.0) defaults to 1.0 (always remove).",
+                "Chance (0.0 to 1.0) defaults to 1.0 (always remove). Dimension is where the mob dies and defaults to every dimension.",
+                "Players are never affected.",
                 "Use * as the entity ID to affect ALL living entities, or as the item ID to strip every drop.",
                 "Note: this also removes equipment and items the mob picked up (e.g. a player's gear a zombie grabbed).",
                 "Example: minecraft:zombie|minecraft:rotten_flesh",
-                "Example: minecraft:skeleton|minecraft:bone|0.5")
+                "Example: minecraft:skeleton|minecraft:bone|0.5",
+                "Example: minecraft:skeleton|minecraft:bone|?|minecraft:the_nether")
                 .defineListAllowEmpty("removeDrops", List.of(), () -> "", o -> o instanceof String);
         DROP_ONLY_ON_PLAYER_KILL = b.comment("Require a player credited with the kill to award configured extra drops.")
                 .define("dropOnlyOnPlayerKill", true);
         EXTRA_DROPS = b.comment(
-                "Extra drops, added after removeDrops: entity_id|item_id|[count]|[chance]|[looting].",
-                "Count defaults to 1 and chance (0.0 to 1.0) to 1.0 (always drop).",
+                "Extra drops, added after removeDrops: entity_id|item_id|[count]|[chance]|[looting]|[dimension_id].",
+                "Count defaults to 1 and chance (0.0 to 1.0) to 1.0 (always drop). Dimension is where the mob dies and defaults to every dimension.",
                 "Use * as the entity ID to affect ALL living entities (including other mods).",
                 "Set looting to T to let Looting affect the drop: each level adds 0 to 1 extra items. F or leaving it out means no bonus.",
                 "Example: minecraft:zombie|minecraft:diamond|2|0.5",
                 "Example: minecraft:zombie|minecraft:diamond|?|0.5|T",
+                "Example: minecraft:zombie|minecraft:diamond|?|?|?|minecraft:the_end",
                 "Example: othermod:boss|minecraft:nether_star|1|1.0")
                 .defineListAllowEmpty("extraDrops", List.of(), () -> "", o -> o instanceof String);
         REMOVE_SPAWNS = b.comment(
@@ -157,17 +160,20 @@ public final class MSConfig {
                 "Example: *|minecraft:the_end|0")
                 .defineListAllowEmpty("experienceModifiers", List.of(), () -> "", o -> o instanceof String);
         DESPAWN_RANGES = b.comment(
-                "Override natural despawn distance (in blocks from the nearest player): entity_id|range.",
+                "Override natural despawn distance (in blocks from the nearest player): entity_id|range|[dimension_id].",
                 "Entities closer than range are kept loaded; entities farther are force-despawned.",
-                "A line for a specific mob wins over a * line.",
-                "Example: minecraft:zombie|32")
+                "Dimension is where the mob is and defaults to every dimension. A line for a specific mob wins over a * line, and for the same",
+                "mob a line for one dimension wins over a line for every dimension.",
+                "Example: minecraft:zombie|32",
+                "Example: minecraft:zombie|64|minecraft:the_nether")
                 .defineListAllowEmpty("despawnRanges", List.of(), () -> "", o -> o instanceof String);
         LIGHT_SPAWN_RESTRICTIONS = b.comment(
-                "Restrict natural spawning to a light level range: entity_id|[minLight]|[maxLight] (0-15).",
-                "Min light defaults to 0 and max light to 15.",
+                "Restrict natural spawning to a light level range: entity_id|[minLight]|[maxLight]|[dimension_id]|[biome] (0-15).",
+                "Min light defaults to 0 and max light to 15. Dimension and biome default to all of them; biome tags (#...) work too.",
                 "Cancels the spawn if the block's light level falls outside the range.",
                 "Example: minecraft:zombie|0|7",
-                "Example: minecraft:zombie|?|7")
+                "Example: minecraft:zombie|?|7",
+                "Example: minecraft:zombie|0|7|minecraft:overworld|#minecraft:is_forest")
                 .defineListAllowEmpty("lightSpawnRestrictions", List.of(), () -> "", o -> o instanceof String);
         SPEC = b.build();
     }

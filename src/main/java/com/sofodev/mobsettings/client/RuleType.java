@@ -57,9 +57,11 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
     static final Map<String, RuleType> TYPES = Map.of(
             "extraDrops", new RuleType("extraDrops", List.of(
                     picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, false),
-                    optionalInteger("count", 1, 100000, "1"), optionalChance(), optionalFlag("looting")), -1, -1),
+                    optionalInteger("count", 1, 100000, "1"), optionalChance(), optionalFlag("looting"),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "removeDrops", new RuleType("removeDrops", List.of(
-                    picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, true), optionalChance()), -1, -1),
+                    picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, true), optionalChance(),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "addSpawns", new RuleType("addSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, false), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), integer("weight", 1, 100000),
@@ -76,10 +78,12 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     decimal("multiplier", 0, 1000)), -1, -1),
             "despawnRanges", new RuleType("despawnRanges", List.of(
-                    picker("entity", Kind.ENTITY, true), decimal("range", 1, 1024)), -1, -1),
+                    picker("entity", Kind.ENTITY, true), decimal("range", 1, 1024),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "lightSpawnRestrictions", new RuleType("lightSpawnRestrictions", List.of(
                     picker("entity", Kind.ENTITY, true), optionalInteger("minLight", 0, 15, "0"),
-                    optionalInteger("maxLight", 0, 15, "15")), 1, 2));
+                    optionalInteger("maxLight", 0, 15, "15"), optionalPicker("dimension", Kind.DIMENSION),
+                    optionalPicker("biome", Kind.BIOME)), 1, 2));
 
     /** The line with every field in place, the same way the server reads it. */
     private String layout(String line) {
@@ -88,7 +92,6 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             case "removeSpawns" -> SpawnLines.removeSpawn(line);
             case "attributeOverrides" -> SpawnLines.attribute(line);
             case "experienceModifiers" -> SpawnLines.experience(line);
-            case "despawnRanges" -> line;
             default -> SpawnLines.pad(line, fields.size());
         };
     }
@@ -186,8 +189,11 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         }
         if (minIndex >= 0 && values[maxIndex].isEmpty() && fields.get(maxIndex).fallback() == null) args[maxIndex] = args[minIndex];
         // Some rules read differently when their last field is set. An explicit F means the same as leaving the flag out.
-        String lastValue = values[values.length - 1];
-        boolean off = fields.getLast().kind() == Kind.FLAG && lastValue.equalsIgnoreCase("F");
+        // Dimension and biome only say where, so the field before them decides.
+        int last = values.length - 1;
+        while (last > 0 && (fields.get(last).kind() == Kind.DIMENSION || fields.get(last).kind() == Kind.BIOME)) last--;
+        String lastValue = values[last];
+        boolean off = fields.get(last).kind() == Kind.FLAG && lastValue.equalsIgnoreCase("F");
         String sentence = "mobsettings.ui.describe." + key;
         boolean variant = !lastValue.isEmpty() && !off && Language.getInstance().has(sentence + ".optional");
         return Component.translatable(variant ? sentence + ".optional" : sentence, args);
