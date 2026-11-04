@@ -1,5 +1,6 @@
 package com.sofodev.mobsettings;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +9,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
@@ -29,9 +31,9 @@ final class Rules {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     record RemoveDrop(EntityRule entity, @Nullable Item item, double chance, @Nullable Identifier dimension) {}
-    record ExtraDrop(EntityRule entity, Item item, int count, double chance, boolean looting, @Nullable Identifier dimension) {}
+    record ExtraDrop(EntityRule entity, Item item, RuleData.@Nullable ItemTemplate template, int count, double chance, boolean looting, @Nullable Identifier dimension) {}
     record RemoveSpawn(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
-    record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
+    record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules, RuleData.@Nullable EntityTemplate template) {}
     record GroupSize(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, int min, int max) {}
     record DamageModifier(EntityRule entity, @Nullable Double dealt, @Nullable Double taken, @Nullable Identifier dimension) {}
     record AttributeOverride(EntityRule entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
@@ -78,7 +80,7 @@ final class Rules {
     });
     static final Cache<ExtraDrop> EXTRA_DROPS = new Cache<>("extraDrops", MSConfig.EXTRA_DROPS, line -> {
         String[] f = fields(SpawnLines.pad(line, 6), 6, 6);
-        return new ExtraDrop(entity(f[0]), registered(BuiltInRegistries.ITEM, f[1], "item"),
+        return new ExtraDrop(entity(f[0]), registered(BuiltInRegistries.ITEM, SpawnLines.fieldId(f[1]), "item"), itemTemplate(f[1]),
                 SpawnLines.isDefault(f[2]) ? 1 : integer(f[2], "count", 1, 100000),
                 SpawnLines.isDefault(f[3]) ? 1 : decimal(f[3], "chance", 0, 1),
                 !SpawnLines.isDefault(f[4]) && flag(f[4], "looting"), dimension(f[5]));
@@ -91,14 +93,14 @@ final class Rules {
     });
     static final Cache<AddSpawn> ADD_SPAWNS = new Cache<>("addSpawns", MSConfig.ADD_SPAWNS, line -> {
         String[] f = fields(SpawnLines.addSpawn(line), 7, 7);
-        EntityType<?> type = registered(BuiltInRegistries.ENTITY_TYPE, f[0], "entity");
+        EntityType<?> type = registered(BuiltInRegistries.ENTITY_TYPE, SpawnLines.fieldId(f[0]), "entity");
         // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; reject instead of spawning the wrong mob.
         if (type.getCategory() == MobCategory.MISC) throw new Invalid(f[0] + " can't spawn naturally");
         int min = SpawnLines.isDefault(f[4]) ? 1 : integer(f[4], "min group", 1, 1000);
         int max = SpawnLines.isDefault(f[5]) ? min : integer(f[5], "max group", 1, 1000);
         if (max < min) throw new Invalid("max group is lower than min group");
         return new AddSpawn(type, dimension(f[1]), biome(f[2]), integer(f[3], "weight", 1, 100000), min, max,
-                !SpawnLines.isDefault(f[6]) && flag(f[6], "use spawn rules"));
+                !SpawnLines.isDefault(f[6]) && flag(f[6], "use spawn rules"), entityTemplate(f[0]));
     });
     static final Cache<GroupSize> GROUP_SIZES = new Cache<>("spawnGroupSizes", MSConfig.GROUP_SIZES, line -> {
         String[] f = fields(SpawnLines.groupSize(line), 5, 5);
@@ -152,7 +154,7 @@ final class Rules {
     }
 
     private static String[] fields(String line, int min, int max) {
-        String[] fields = line.split("\\|", -1);
+        String[] fields = SpawnLines.split(line);
         if (fields.length < min || fields.length > max) {
             throw new Invalid(min == max ? "expected " + min + " fields" : "expected " + min + " to " + max + " fields");
         }
@@ -203,6 +205,25 @@ final class Rules {
             LOGGER.warn("Spawn rule uses the dimension {} as a biome, so it matches nothing. To target the dimension, write entity|{}|?", id, id);
         }
         return new BiomeRule(id, null);
+    }
+
+    /** Components can name datapack content such as enchantments, so here only their shape is checked. */
+    private static RuleData.@Nullable ItemTemplate itemTemplate(String field) {
+        String data = SpawnLines.fieldData(field);
+        if (data.isEmpty()) return null;
+        if (!data.startsWith("[") || !data.endsWith("]")) throw new Invalid("item data must be written as [component=value,...]");
+        return new RuleData.ItemTemplate(field);
+    }
+
+    private static RuleData.@Nullable EntityTemplate entityTemplate(String field) {
+        String data = SpawnLines.fieldData(field);
+        if (data.isEmpty()) return null;
+        if (!data.startsWith("{")) throw new Invalid("entity data must be written as {key:value,...}");
+        try {
+            return new RuleData.EntityTemplate(field, TagParser.parseCompoundFully(data));
+        } catch (CommandSyntaxException ex) {
+            throw new Invalid("entity data is not valid: " + ex.getMessage());
+        }
     }
 
     private static int integer(String value, String name, int min, int max) {

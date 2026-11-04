@@ -104,9 +104,18 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         };
     }
 
+    /** The field that can carry item or entity data after its ID, or -1 for rules without one. */
+    int dataField() {
+        return switch (key) {
+            case "extraDrops" -> 1;
+            case "addSpawns" -> 0;
+            default -> -1;
+        };
+    }
+
     /** One value per field; a skipped optional field is empty. */
     String[] split(String line) {
-        String[] parts = layout(line).split("\\|", -1);
+        String[] parts = SpawnLines.split(layout(line));
         String[] values = new String[fields.size()];
         for (int i = 0; i < values.length; i++) {
             values[i] = i < parts.length && !SpawnLines.isDefault(parts[i]) ? parts[i].trim() : "";
@@ -141,7 +150,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
 
     /** Returns null when valid, otherwise a translation key describing the first problem. */
     String validate(String line) {
-        String[] raw = layout(line).split("\\|", -1);
+        String[] raw = SpawnLines.split(layout(line));
         long required = fields.stream().filter(f -> !f.optional()).count();
         if (raw.length < required || raw.length > fields.size()) return "mobsettings.ui.error.fieldCount";
         String[] values = split(line);
@@ -162,6 +171,10 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         Field field = fields.get(index);
         String value = values[index];
         if (value.isEmpty()) return field.optional() ? null : "mobsettings.ui.error.required";
+        if (index == dataField()) {
+            if (!dataValid(value)) return "mobsettings.ui.error.badData";
+            value = SpawnLines.fieldId(value);
+        }
         if (field.isPicker()) {
             if (value.equals("*")) return field.wildcard() ? null : "mobsettings.ui.error.noWildcard";
             if (Suggestions.isSelector(field.kind(), value) && !field.wildcard()) return "mobsettings.ui.error.noWildcard";
@@ -183,6 +196,23 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         return null;
     }
 
+    private boolean dataValid(String value) {
+        String data = SpawnLines.fieldData(value);
+        if (data.isEmpty()) return true;
+        if (key.equals("extraDrops")) {
+            ItemLine item = ItemLine.parse(value);
+            return item != null && item.problem() == null;
+        }
+        EntityLine entity = data.startsWith("{") ? EntityLine.parse(data) : null;
+        return entity != null && entity.problem() == null;
+    }
+
+    private String pickerName(int index, String value) {
+        Field field = fields.get(index);
+        if (index != dataField() || SpawnLines.fieldData(value).isEmpty()) return Suggestions.displayName(field.kind(), value);
+        return Component.translatable("mobsettings.ui.note.withData", Suggestions.displayName(field.kind(), SpawnLines.fieldId(value))).getString();
+    }
+
     /** A readable sentence for a line, e.g. "Zombie drops 1 Diamond (5% chance)"; null if the line is invalid. */
     @Nullable Component describe(String line) {
         if (validate(line) != null) return null;
@@ -192,7 +222,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             Field field = fields.get(i);
             String value = values[i].isEmpty() ? (field.isPicker() ? "*" : field.fallback()) : values[i];
             args[i] = value == null ? ""
-                    : field.isPicker() ? Suggestions.displayName(field.kind(), value)
+                    : field.isPicker() ? pickerName(i, value)
                     : field.percent() ? format(Double.parseDouble(value) * 100) + "%"
                     : value;
         }
