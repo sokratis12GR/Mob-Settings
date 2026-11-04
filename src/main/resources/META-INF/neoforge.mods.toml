@@ -10,6 +10,7 @@ displayName="${mod_name}"
 authors="${mod_authors}"
 description='''${mod_description}'''
 iconFile="mob_settings.png"
+bannerFile="mob_settings.png"
 updateJSONURL = "https://sokratis.space/mobsettings/26.3/update.json"
 displayURL = "https://www.curseforge.com/minecraft/mc-mods/mob-settings"
 

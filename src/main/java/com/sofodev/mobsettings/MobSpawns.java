@@ -4,20 +4,26 @@ import com.mojang.serialization.MapCodec;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.random.Weighted;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.util.valueproviders.UniformInt;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import net.neoforged.neoforge.common.world.MobSpawnSettingsBuilder;
+import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -27,6 +33,8 @@ import org.jspecify.annotations.Nullable;
  * Applies spawn rules in two layers, each removing before adding:
  * rules for every dimension edit the biomes themselves (so chunk-generation spawns and other mods see them),
  * then dimension-specific rules edit the spawn list at runtime, since a biome doesn't know which dimension it's in.
+ * Added mobs also skip their own spawn rules (ground, light) where a rule covers them, or they'd rarely spawn outside
+ * their usual habitat, unless the rule asks to keep those rules.
  */
 public final class MobSpawns implements BiomeModifier {
     private static final MobSpawns INSTANCE = new MobSpawns();
@@ -78,6 +86,41 @@ public final class MobSpawns implements BiomeModifier {
             if (!rule.biome().matches(biome)) continue;
             event.addSpawnerData(new Weighted<>(spawnerData(rule), rule.weight()));
         }
+    }
+
+    public static void onSpawnPlacementCheck(MobSpawnEvent.SpawnPlacementCheck event) {
+        if (event.getDefaultResult() || event.getResult() != MobSpawnEvent.SpawnPlacementCheck.Result.DEFAULT) return;
+        if (isNaturalSpawn(event.getSpawnType()) && ignoresSpawnRules(event.getEntityType(), event.getLevel(), event.getPos())) {
+            event.setResult(MobSpawnEvent.SpawnPlacementCheck.Result.SUCCEED);
+        }
+    }
+
+    public static void onPositionCheck(MobSpawnEvent.PositionCheck event) {
+        if (event.getResult() != MobSpawnEvent.PositionCheck.Result.DEFAULT || !isNaturalSpawn(event.getSpawnType())) return;
+        Mob mob = event.getEntity();
+        if (ignoresSpawnRules(mob.getType(), event.getLevel(), mob.blockPosition())) {
+            // Only the mob's own rules are skipped, so it still can't spawn inside liquid or other mobs.
+            event.setResult(mob.checkSpawnObstruction(event.getLevel())
+                    ? MobSpawnEvent.PositionCheck.Result.SUCCEED
+                    : MobSpawnEvent.PositionCheck.Result.FAIL);
+        }
+    }
+
+    private static boolean isNaturalSpawn(EntitySpawnReason reason) {
+        return reason == EntitySpawnReason.NATURAL || reason == EntitySpawnReason.CHUNK_GENERATION;
+    }
+
+    private static boolean ignoresSpawnRules(EntityType<?> type, ServerLevelAccessor level, BlockPos pos) {
+        Identifier dimension = null;
+        Holder<Biome> biome = null;
+        for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+            if (rule.useSpawnRules() || rule.entity() != type) continue;
+            if (dimension == null) dimension = level.getLevel().dimension().identifier();
+            if (!Rules.matches(rule.dimension(), dimension)) continue;
+            if (biome == null) biome = level.getBiome(pos);
+            if (rule.biome().matches(biome)) return true;
+        }
+        return false;
     }
 
     private static void reduce(WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner, Rules.RemoveSpawn rule) {

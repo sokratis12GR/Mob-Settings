@@ -1,26 +1,28 @@
 ## New features
 
-- **Per-dimension spawn rules**: `addSpawns` and `removeSpawns` now take a dimension after the entity, so the same biome can be configured differently in each dimension (e.g. a modded dimension that reuses vanilla biomes).
-  - Format: `entity_id|dimension_id|biome|weight|min_group|max_group` and `entity_id|dimension_id|biome` or `entity_id|dimension_id|biome|percent`.
-  - Use `*` as the dimension for every dimension. Old lines without a dimension still work and apply to every dimension; the config screen upgrades them when you edit them.
-  - Example: `minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10|1|3`
-- **Biome tags**: anywhere a biome is asked for, a biome tag works too, e.g. `#minecraft:is_nether` or `#c:is_forest`. The config screen lists the available tags after the biomes.
+- **Per-dimension attributes**: `attributeOverrides` now takes an optional dimension after the entity: `entity_id|[dimension_id]|attribute_id|value`. The dimension is where the mob first spawned, and its stats don't change if it travels.
+  - Example: `minecraft:zombie|minecraft:the_nether|minecraft:attack_damage|6`
+- **Experience modifiers**: the new `experienceModifiers` list multiplies the experience a mob drops: `entity_id|[dimension_id]|multiplier`. The dimension is where the mob dies.
+  - Example: `minecraft:zombie|minecraft:the_nether|2.5`
+- **Looting on extra drops**: `extraDrops` lines can end with an optional `T` to let Looting add 0 to 1 extra items per level: `entity_id|item_id|count|chance|T`. `F` or leaving it out means no bonus, so existing lines behave the same.
+  - Example: `minecraft:zombie|minecraft:diamond|2|0.5|T`
+- **Optional fields**: many fields can now be left off the end of a line, or skipped with `?` to set a later one. The config screen lets you leave them blank too.
+  - Defaults: dimensions and biomes apply to all of them, `extraDrops` count is 1 and chance is 100%, `addSpawns` min group is 1 and max group matches it, and light levels are 0 to 15.
+  - A single ID after the entity in a spawn line is the biome. To target a dimension, skip the biome: `minecraft:zombie|minecraft:the_nether|?`
+  - `extraDrops` example: `minecraft:zombie|minecraft:diamond|?|0.5` drops 1 diamond at 50%
+  - `experienceModifiers` example: `minecraft:zombie|2` doubles zombie experience in every dimension
+  - `lightSpawnRestrictions` example: `minecraft:zombie|?|7` only lets zombies spawn at light level 7 or below
+- **Default namespace**: IDs without a namespace use `minecraft`, so `zombie` means `minecraft:zombie`.
 
 ## Changes
 
-- **Remove runs before add**: `removeSpawns` now runs before `addSpawns`, so your own added spawns are never removed. `*|*|*` plus a few `addSpawns` lines leaves only those mobs spawning. `removeDrops` already ran before `extraDrops`; both are now listed in that order in the config file and screen, with comments explaining it.
-- Rules for every dimension are applied first; rules for one dimension are applied on top of them, removing before adding as well.
-- A line for a specific mob now wins over a `*` line in `attributeOverrides` (same attribute) and `despawnRanges`, regardless of order.
-- Invalid config entries are logged as a warning with the reason, instead of being skipped silently.
-- Config rules are parsed once per config load instead of on every drop, spawn and despawn check.
-- The entry editor fits rules with many fields on smaller screens.
+- `addSpawns` mobs now ignore their usual spawn rules (such as ground type and light level) wherever the line applies, so a chicken added to the Nether really spawns there. This also applies to that mob's existing spawns in those places. End a line with `T` to keep the usual rules: `entity_id|[dimension_id]|[biome]|weight|[min_group]|[max_group]|T`.
+  - Example: `minecraft:cow|minecraft:overworld|#minecraft:is_forest|10|2|4|T`
+- `*` in `attributeOverrides` no longer affects players. Add a `minecraft:player` line to change their attributes.
+- Config files are upgraded once when loaded: spawn and attribute lines without a dimension are rewritten with a `*` dimension. They mean the same as before.
+- A `removeSpawns` line that is only `*` is ignored with a warning. Write `*|*|*` to remove every spawn.
+- A warning is logged when `minecraft:overworld` or `minecraft:the_nether` is used as a biome, since that matches nothing.
 
 ## Fixes
 
-- Raising `minecraft:max_health` with `attributeOverrides` now spawns mobs at full health instead of their old maximum (e.g. 20/40).
-
-## Notes
-
-- Spawn rules for one dimension only apply to spawning after chunks generate, since a biome can be shared by several dimensions. Rules for every dimension (`*`) also affect animals placed during chunk generation.
-- Spawn rules for every dimension don't affect structure spawns (fortresses, ocean monuments, witch huts, pillager outposts); rules for one dimension do. Neither affects spawner blocks.
-- `removeDrops` also removes equipment and items a mob picked up.
+- Mobs and players with a `minecraft:max_health` override no longer heal fully when they change dimension.

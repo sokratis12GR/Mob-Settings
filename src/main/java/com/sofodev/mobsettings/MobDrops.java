@@ -1,10 +1,15 @@
 package com.sofodev.mobsettings;
 
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 
 /** Removes, then adds, registry-ID-based drops for any living entity, including modded ones. */
@@ -24,7 +29,7 @@ public final class MobDrops {
         if (MSConfig.DROP_ONLY_ON_PLAYER_KILL.get() && !(event.getSource().getEntity() instanceof Player)) return;
         for (Rules.ExtraDrop rule : Rules.EXTRA_DROPS.get()) {
             if (!Rules.matches(rule.entity(), type) || entity.getRandom().nextDouble() >= rule.chance()) continue;
-            int remaining = rule.count();
+            int remaining = rule.count() + (rule.looting() ? lootingBonus(event) : 0);
             while (remaining > 0) {
                 int size = Math.min(remaining, rule.item().getDefaultMaxStackSize());
                 if (size <= 0) break;
@@ -33,5 +38,13 @@ public final class MobDrops {
                 remaining -= size;
             }
         }
+    }
+
+    /** Like vanilla's looting bonus: 0 to 1 extra items per level of the killer's Looting. */
+    private static int lootingBonus(LivingDropsEvent event) {
+        if (!(event.getSource().getEntity() instanceof LivingEntity killer)) return 0;
+        LivingEntity entity = event.getEntity();
+        Holder<Enchantment> looting = entity.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LOOTING);
+        return entity.getRandom().nextInt(EnchantmentHelper.getEnchantmentLevel(looting, killer) + 1);
     }
 }
