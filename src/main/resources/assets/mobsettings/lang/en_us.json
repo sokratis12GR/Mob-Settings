@@ -16,7 +16,7 @@
   "mobsettings.configuration.experienceModifiers.tooltip": "Multiply the experience a mob drops in a dimension.",
   "mobsettings.configuration.despawnRanges": "Despawn Ranges",
   "mobsettings.configuration.despawnRanges.tooltip": "Set how far from players a mob despawns.",
-  "mobsettings.configuration.lightSpawnRestrictions": "Light Level Spawn Restrictions",
+  "mobsettings.configuration.lightSpawnRestrictions": "Light Spawn Restrictions",
   "mobsettings.configuration.lightSpawnRestrictions.tooltip": "Only let a mob spawn within a light level range.",
   "mobsettings.ui.add": "Add Entry",
   "mobsettings.ui.edit": "Edit",
