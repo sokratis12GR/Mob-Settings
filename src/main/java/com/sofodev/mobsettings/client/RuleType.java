@@ -78,6 +78,9 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     picker("attribute", Kind.ATTRIBUTE, false),
                     new Field("value", Kind.ATTRIBUTE_VALUE, false, false, -Double.MAX_VALUE, Double.MAX_VALUE, false, null)), -1, -1),
+            "damageModifiers", new RuleType("damageModifiers", List.of(
+                    picker("entity", Kind.ENTITY, true), optionalDecimal("dealt", 0, 1000, "1"),
+                    optionalDecimal("taken", 0, 1000, "1"), optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "experienceModifiers", new RuleType("experienceModifiers", List.of(
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     decimal("multiplier", 0, 1000)), -1, -1),
@@ -151,6 +154,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             return "mobsettings.ui.error.maxBelowMin";
         }
         if (key.equals("removeSpawns") && SpawnLines.removesEverything(line)) return "mobsettings.ui.error.removesEverything";
+        if (key.equals("damageModifiers") && values[1].isEmpty() && values[2].isEmpty()) return "mobsettings.ui.error.noDamage";
         return null;
     }
 

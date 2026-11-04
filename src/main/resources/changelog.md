@@ -12,6 +12,8 @@
   - Example: `minecraft:skeleton|minecraft:bone|?|minecraft:the_nether`
 - New `spawnGroupSizes` list changes how many of a mob spawn together in the spawns that already exist: `entity_id|[dimension_id]|[biome]|min_group|[max_group]`.
   - Example: `minecraft:zombie|1|1`
+- New `damageModifiers` list multiplies the damage a mob deals and takes: `entity_id|[dealt]|[taken]|[dimension_id]`. Arrows and other projectiles count for whoever fired them.
+  - Example: `minecraft:zombie|?|0.5|minecraft:the_nether`
 
 ## Fixes
 
