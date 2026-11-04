@@ -15,9 +15,9 @@ public final class SpawnLines {
         return trimmed.isEmpty() || trimmed.equals(DEFAULT);
     }
 
-    /** {@code entity|[dimension]|[biome]|weight|[min]|[max]} */
+    /** {@code entity|[dimension]|[biome]|weight|[min]|[max]|[useSpawnRules]} */
     public static String addSpawn(String line) {
-        return withLocation(line, 6);
+        return withLocation(line, 7);
     }
 
     /** {@code entity|[dimension]|[biome]|[percent]} */

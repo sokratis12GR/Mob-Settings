@@ -63,7 +63,8 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             "addSpawns", new RuleType("addSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, false), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), integer("weight", 1, 100000),
-                    optionalInteger("minGroup", 1, 1000, "1"), optionalInteger("maxGroup", 1, 1000, null)), 4, 5),
+                    optionalInteger("minGroup", 1, 1000, "1"), optionalInteger("maxGroup", 1, 1000, null),
+                    optionalFlag("useSpawnRules")), 4, 5),
             "removeSpawns", new RuleType("removeSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), optionalDecimal("percent", 0, 100, "100")), -1, -1),

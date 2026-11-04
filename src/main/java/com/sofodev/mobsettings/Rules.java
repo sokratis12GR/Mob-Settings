@@ -30,7 +30,7 @@ final class Rules {
     record RemoveDrop(@Nullable EntityType<?> entity, @Nullable Item item, double chance) {}
     record ExtraDrop(@Nullable EntityType<?> entity, Item item, int count, double chance, boolean looting) {}
     record RemoveSpawn(@Nullable EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
-    record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max) {}
+    record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
     record AttributeOverride(@Nullable EntityType<?> entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
     record ExperienceModifier(@Nullable EntityType<?> entity, @Nullable Identifier dimension, double multiplier) {}
     record DespawnRange(@Nullable EntityType<?> entity, double range) {}
@@ -63,14 +63,15 @@ final class Rules {
         return new RemoveSpawn(entity(f[0]), dimension(f[1]), biome(f[2]), 1 - percent / 100);
     });
     static final Cache<AddSpawn> ADD_SPAWNS = new Cache<>("addSpawns", MSConfig.ADD_SPAWNS, line -> {
-        String[] f = fields(SpawnLines.addSpawn(line), 6, 6);
+        String[] f = fields(SpawnLines.addSpawn(line), 7, 7);
         EntityType<?> type = registered(BuiltInRegistries.ENTITY_TYPE, f[0], "entity");
         // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; reject instead of spawning the wrong mob.
         if (type.getCategory() == MobCategory.MISC) throw new Invalid(f[0] + " can't spawn naturally");
         int min = SpawnLines.isDefault(f[4]) ? 1 : integer(f[4], "min group", 1, 1000);
         int max = SpawnLines.isDefault(f[5]) ? min : integer(f[5], "max group", 1, 1000);
         if (max < min) throw new Invalid("max group is lower than min group");
-        return new AddSpawn(type, dimension(f[1]), biome(f[2]), integer(f[3], "weight", 1, 100000), min, max);
+        return new AddSpawn(type, dimension(f[1]), biome(f[2]), integer(f[3], "weight", 1, 100000), min, max,
+                !SpawnLines.isDefault(f[6]) && flag(f[6], "use spawn rules"));
     });
     static final Cache<AttributeOverride> ATTRIBUTE_OVERRIDES = new Cache<>("attributeOverrides", MSConfig.ATTRIBUTE_OVERRIDES, line -> {
         String[] f = fields(SpawnLines.attribute(line), 4, 4);

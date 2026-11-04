@@ -71,17 +71,21 @@ public final class MSConfig {
                 .worldRestart()
                 .defineListAllowEmpty("removeSpawns", List.of(), () -> "", o -> o instanceof String);
         ADD_SPAWNS = b.comment(
-                "Add natural spawns, after removeSpawns: entity_id|[dimension_id]|[biome]|weight|[min_group]|[max_group].",
+                "Add natural spawns, after removeSpawns: entity_id|[dimension_id]|[biome]|weight|[min_group]|[max_group]|[use_spawn_rules].",
                 "Dimension and biome default to all of them, the same as writing *. Biome tags (#...) work too.",
                 "A single ID after the entity is the biome. To target a dimension, write entity_id|dimension_id|?|weight.",
                 "Min group defaults to 1, and max group to the min group.",
+                "Added mobs ignore their usual spawn rules (such as ground type and light level) wherever the line applies, so",
+                "they spawn anywhere they fit. This includes that mob's existing spawns there, so an added zombie can also",
+                "spawn in daylight. Set use_spawn_rules to T to keep the mob's usual rules. F or leaving it out ignores them.",
                 "Rules for every dimension (*) edit the biome itself, so they also apply to animals placed when chunks",
                 "generate. Rules for one dimension only affect spawning afterwards, since a biome can be used in",
                 "several dimensions.",
                 "Entities in the MISC category (e.g. armor stands, boats) cannot naturally spawn and are skipped.",
                 "Example: othermod:forest_beast|minecraft:forest|20|1|2",
                 "Example: minecraft:blaze|minecraft:the_nether|?|10|1|3",
-                "Example: minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10")
+                "Example: minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10",
+                "Example: minecraft:cow|minecraft:overworld|#minecraft:is_forest|10|2|4|T")
                 .worldRestart()
                 .defineListAllowEmpty("addSpawns", List.of(), () -> "", o -> o instanceof String);
         ATTRIBUTE_OVERRIDES = b.comment(
