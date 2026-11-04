@@ -3,7 +3,6 @@ package com.sofodev.mobsettings.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -18,6 +17,8 @@ import org.jetbrains.annotations.Nullable;
 
 /** Lists the entries of one rule-based config option; changes are only applied on Done. */
 final class RuleListScreen extends Screen {
+    private static final int LINE_HEIGHT = 11;
+
     private final Screen parent;
     private final RuleType type;
     private final List<String> rules;
@@ -34,7 +35,10 @@ final class RuleListScreen extends Screen {
     @Override
     protected void init() {
         // Ends above the Add button so the last rows and the scrollbar aren't covered.
-        RuleRows rows = addRenderableWidget(new RuleRows(minecraft, width, height - 36 - 60, 36));
+        // All rows of a list have one height on this version, so it's what the longest rule needs.
+        int rowHeight = 28;
+        for (String rule : rules) rowHeight = Math.max(rowHeight, rowHeight(rule));
+        RuleRows rows = addRenderableWidget(new RuleRows(minecraft, width, height - 36 - 60, 36, rowHeight));
         for (int i = 0; i < rules.size(); i++) rows.add(i);
 
         int buttonY = height - 28;
@@ -48,6 +52,28 @@ final class RuleListScreen extends Screen {
                 .bounds(width / 2 - 154, buttonY, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds(width / 2 + 4, buttonY, 150, 20).build());
+    }
+
+    private int rowWidth() {
+        return Math.min(560, width - 40);
+    }
+
+    private Component summary(String rule, @Nullable String error) {
+        Component description = type.describe(rule);
+        return error != null
+                ? Component.translatable("mobsettings.ui.invalid", Component.translatable(error))
+                : description != null ? description : Component.literal(rule);
+    }
+
+    private List<FormattedCharSequence> wrap(Component text) {
+        // Both buttons with their gap (104) and the gap before them (8).
+        return font.split(text, rowWidth() - 112);
+    }
+
+    /** Tall enough for every wrapped line, and never shorter than the buttons need. */
+    private int rowHeight(String rule) {
+        int lines = wrap(summary(rule, type.validate(rule))).size() + wrap(Component.literal(rule)).size();
+        return Math.max(28, lines * LINE_HEIGHT + 6);
     }
 
     private void edit(String line, Consumer<String> onSave) {
@@ -71,8 +97,8 @@ final class RuleListScreen extends Screen {
     }
 
     private final class RuleRows extends ContainerObjectSelectionList<RuleRows.Row> {
-        RuleRows(Minecraft minecraft, int width, int height, int y) {
-            super(minecraft, width, height, y, 28);
+        RuleRows(Minecraft minecraft, int width, int height, int y, int rowHeight) {
+            super(minecraft, width, height, y, rowHeight);
         }
 
         void add(int index) {
@@ -81,23 +107,20 @@ final class RuleListScreen extends Screen {
 
         @Override
         public int getRowWidth() {
-            return Math.min(400, width - 40);
+            return rowWidth();
         }
 
         final class Row extends ContainerObjectSelectionList.Entry<Row> {
-            private final int index;
             private final @Nullable String error;
-            private final Component summary;
+            private final List<FormattedCharSequence> summaryLines;
+            private final List<FormattedCharSequence> rawLines;
             private final Button editButton;
             private final Button deleteButton;
 
             Row(int index) {
-                this.index = index;
                 this.error = type.validate(rules.get(index));
-                Component description = type.describe(rules.get(index));
-                this.summary = error != null
-                        ? Component.translatable("mobsettings.ui.invalid", Component.translatable(error))
-                        : description != null ? description : Component.literal(rules.get(index));
+                this.summaryLines = wrap(summary(rules.get(index), error));
+                this.rawLines = wrap(Component.literal(rules.get(index)));
                 this.editButton = Button.builder(Component.translatable("mobsettings.ui.edit"),
                         b -> edit(rules.get(index), line -> rules.set(index, line))).size(50, 20).build();
                 this.deleteButton = Button.builder(Component.translatable("mobsettings.ui.delete"), b -> {
@@ -118,21 +141,14 @@ final class RuleListScreen extends Screen {
                 editButton.setPosition(deleteButton.getX() - 4 - editButton.getWidth(), buttonY);
                 editButton.render(graphics, mouseX, mouseY, a);
                 deleteButton.render(graphics, mouseX, mouseY, a);
-                int textWidth = editButton.getX() - 8 - left;
-                String summaryText = summary.getString();
-                String rawText = rules.get(index);
-                String shownSummary = font.plainSubstrByWidth(summaryText, textWidth);
-                String shownRaw = font.plainSubstrByWidth(rawText, textWidth);
-                graphics.drawString(font, shownSummary, left, top + 2, error == null ? 0xFFFFFFFF : 0xFFFF5555);
-                graphics.drawString(font, shownRaw, left, top + 13, 0xFF808080);
-
-                // Long lines get cut off, so hovering the text shows them in full.
-                boolean overText = mouseX >= left && mouseX < left + textWidth
-                        && mouseY >= top && mouseY < top + rowHeight;
-                if (overText && (!shownSummary.equals(summaryText) || !shownRaw.equals(rawText))) {
-                    List<FormattedCharSequence> lines = new ArrayList<>(font.split(summary, 250));
-                    lines.addAll(font.split(Component.literal(rawText).withStyle(ChatFormatting.GRAY), 250));
-                    setTooltipForNextRenderPass(lines);
+                int textY = top + 2;
+                for (FormattedCharSequence line : summaryLines) {
+                    graphics.drawString(font, line, left, textY, error == null ? 0xFFFFFFFF : 0xFFFF5555);
+                    textY += LINE_HEIGHT;
+                }
+                for (FormattedCharSequence line : rawLines) {
+                    graphics.drawString(font, line, left, textY, 0xFF808080);
+                    textY += LINE_HEIGHT;
                 }
             }
 

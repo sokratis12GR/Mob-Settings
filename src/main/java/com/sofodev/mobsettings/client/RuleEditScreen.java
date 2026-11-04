@@ -1,5 +1,6 @@
 package com.sofodev.mobsettings.client;
 
+import com.sofodev.mobsettings.SpawnLines;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -22,6 +23,7 @@ final class RuleEditScreen extends Screen {
     private static final int ROW_HEIGHT = 34;
     private static final int LABEL_X = 20;
     private static final int BOX_X = LABEL_X + 90;
+    private static final int DATA_BUTTON_WIDTH = 40;
 
     private final Screen parent;
     private final RuleType type;
@@ -48,13 +50,19 @@ final class RuleEditScreen extends Screen {
         for (int i = 0; i < type.fields().size(); i++) {
             RuleType.Field field = type.fields().get(i);
             int index = i;
-            EditBox box = new EditBox(font, BOX_X, TOP + i * rowHeight(), boxWidth, 20, fieldLabel(field));
-            box.setMaxLength(256);
+            boolean hasData = i == type.dataField();
+            EditBox box = new EditBox(font, BOX_X, TOP + i * rowHeight(), hasData ? boxWidth - DATA_BUTTON_WIDTH - 2 : boxWidth, 20, fieldLabel(field));
+            box.setMaxLength(hasData ? 32500 : 256);
+            if (hasData) {
+                addRenderableWidget(Button.builder(Component.translatable("mobsettings.ui.data.button"), b -> openData(index))
+                        .bounds(BOX_X + boxWidth - DATA_BUTTON_WIDTH, TOP + i * rowHeight(), DATA_BUTTON_WIDTH, 20)
+                        .tooltip(Tooltip.create(Component.translatable("mobsettings.ui.help.data." + type.key()))).build());
+            }
             box.setValue(values[i]);
             box.setHint(hint(field));
             box.setTooltip(Tooltip.create(help(field)));
             box.setResponder(value -> {
-                values[index] = value.trim();
+                values[index] = SpawnLines.isDefault(value) ? "" : value.trim();
                 // Attribute matches depend on the chosen entity, so entity edits refresh them too.
                 boolean attributeActive = activeField >= 0 && type.fields().get(activeField).kind() == RuleType.Kind.ATTRIBUTE;
                 if (index == activeField || (index == 0 && attributeActive)) refreshSuggestions();
@@ -79,6 +87,17 @@ final class RuleEditScreen extends Screen {
         revalidate();
     }
 
+    /** Opens the menu for the field's data. Coming back rebuilds this screen from the values. */
+    private void openData(int index) {
+        String value = values[index];
+        if (type.key().equals("extraDrops")) {
+            minecraft.setScreen(new ItemDataScreen(this, value, true, text -> values[index] = text));
+        } else {
+            String id = SpawnLines.fieldId(value);
+            minecraft.setScreen(new EntityDataScreen(this, SpawnLines.fieldData(value), data -> values[index] = id + data));
+        }
+    }
+
     /** Rows shrink on short screens so rules with many fields stay above the error line and buttons. */
     private int rowHeight() {
         return Math.max(22, Math.min(ROW_HEIGHT, (height - TOP - 44) / type.fields().size()));
@@ -95,8 +114,8 @@ final class RuleEditScreen extends Screen {
     }
 
     private static Component hint(RuleType.Field field) {
-        String key = field.isPicker() && field.wildcard() ? "mobsettings.ui.hint.wildcard"
-                : field.optional() ? "mobsettings.ui.hint.optional"
+        String key = field.optional() ? "mobsettings.ui.hint.optional"
+                : field.isPicker() && field.wildcard() ? "mobsettings.ui.hint.wildcard"
                 : null;
         return key == null ? Component.empty() : Component.translatable(key).withStyle(ChatFormatting.DARK_GRAY);
     }
@@ -107,12 +126,13 @@ final class RuleEditScreen extends Screen {
         String value = values[index];
         if (field.isPicker()) {
             if (value.isEmpty() || type.validateField(index, values) != null) return null;
-            String name = Suggestions.displayName(field.kind(), value);
-            return name.equals(value) ? null : Component.literal(name);
+            String id = index == type.dataField() ? SpawnLines.fieldId(value) : value;
+            String name = Suggestions.displayName(field.kind(), id);
+            return name.equals(id) ? null : Component.literal(name);
         }
         double[] range = type.range(index, values);
         if (field.kind() == RuleType.Kind.ATTRIBUTE_VALUE) {
-            Double defaultValue = Suggestions.attributeDefault(values[0], values[1]);
+            Double defaultValue = Suggestions.attributeDefault(values[0], values[2]);
             if (defaultValue == null) return Component.translatable("mobsettings.ui.note.pickAttribute");
             Component normal = Component.translatable("mobsettings.ui.note.default", RuleType.format(defaultValue));
             return range == null ? normal
@@ -139,11 +159,16 @@ final class RuleEditScreen extends Screen {
             return;
         }
         RuleType.Field field = type.fields().get(activeField);
-        String query = values[activeField].toLowerCase(Locale.ROOT);
+        String query = (activeField == type.dataField() ? SpawnLines.fieldId(values[activeField]) : values[activeField]).toLowerCase(Locale.ROOT);
         String entityContext = field.kind() == RuleType.Kind.ATTRIBUTE ? values[0] : null;
         List<Suggestions.Option> matches = new ArrayList<>();
         if (field.wildcard() && "*".contains(query)) {
             matches.add(new Suggestions.Option("*", Suggestions.anyLabel(field.kind()).getString()));
+        }
+        if (field.wildcard()) {
+            for (Suggestions.Option option : Suggestions.selectors(field.kind())) {
+                if (option.matches(query)) matches.add(option);
+            }
         }
         for (Suggestions.Option option : Suggestions.options(field.kind(), entityContext)) {
             if (option.matches(query)) matches.add(option);
@@ -154,7 +179,8 @@ final class RuleEditScreen extends Screen {
     private void pick(Suggestions.Option option) {
         if (activeField < 0) return;
         EditBox box = boxes.get(activeField);
-        box.setValue(option.id());
+        // Picking another ID keeps the field's data.
+        box.setValue(activeField == type.dataField() ? option.id() + SpawnLines.fieldData(values[activeField]) : option.id());
         int next = activeField + 1;
         if (next < boxes.size()) {
             setFocused(boxes.get(next));

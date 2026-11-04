@@ -1,6 +1,8 @@
 package com.sofodev.mobsettings.client;
 
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -17,6 +19,12 @@ public final class MobSettingsConfigScreen extends ConfigurationScreen.Configura
 
     public MobSettingsConfigScreen(Screen parent, ModConfig.Type type, ModConfig config, Component title) {
         super(parent, type, config, title);
+    }
+
+    /** The config version is for upgrading the file, not for players to change. */
+    @Override
+    protected @Nullable Element createIntegerValue(String key, ModConfigSpec.ValueSpec spec, Supplier<Integer> source, Consumer<Integer> target) {
+        return key.equals("configVersion") ? null : super.createIntegerValue(key, spec, source, target);
     }
 
     @Override

@@ -13,9 +13,10 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,8 +27,10 @@ import net.minecraft.world.entity.ai.attributes.RangedAttribute;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
+import net.neoforged.fml.ModList;
 import org.jetbrains.annotations.Nullable;
 
 /** Searchable option sources for the rule editor's picker fields. */
@@ -38,7 +41,7 @@ final class Suggestions {
         }
     }
 
-    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes;
+    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes, entitySelectors, vanillaEnchantments, dataComponents;
 
     private Suggestions() {}
 
@@ -50,20 +53,73 @@ final class Suggestions {
             case ATTRIBUTE -> attributeOptions(entityContext);
             case DIMENSION -> dimensionOptions();
             case BIOME -> biomeOptions();
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> List.of();
+            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> List.of();
         };
     }
 
+    /** Whether a picker value is an entity tag or a whole mod ({@code modid:*}) rather than a single entity. */
+    static boolean isSelector(RuleType.Kind kind, String value) {
+        return isEntity(kind) && (value.startsWith("#") || value.endsWith(":*"));
+    }
+
+    private static boolean isEntity(RuleType.Kind kind) {
+        return kind == RuleType.Kind.ENTITY || kind == RuleType.Kind.SPAWNABLE_ENTITY;
+    }
+
+    /** Entity tags (written #tag) and whole mods (written modid:*), for fields that accept more than one entity. */
+    static List<Option> selectors(RuleType.Kind kind) {
+        if (!isEntity(kind)) return List.of();
+        if (entitySelectors == null) {
+            List<Option> tags = new ArrayList<>();
+            var level = Minecraft.getInstance().level;
+            if (level != null) {
+                level.registryAccess().lookupOrThrow(Registries.ENTITY_TYPE).listTagIds()
+                        .forEach(tag -> tags.add(entityTagOption(tag.location())));
+            } else {
+                for (Field field : EntityTypeTags.class.getFields()) {
+                    if (!Modifier.isStatic(field.getModifiers()) || field.getType() != TagKey.class) continue;
+                    try {
+                        tags.add(entityTagOption(((TagKey<?>) field.get(null)).location()));
+                    } catch (IllegalAccessException ignored) {}
+                }
+            }
+            Stream<Option> mods = BuiltInRegistries.ENTITY_TYPE.keySet().stream().map(ResourceLocation::getNamespace).distinct()
+                    .map(namespace -> new Option(namespace + ":*", modName(namespace)));
+            entitySelectors = Stream.concat(sorted(mods).stream(), sorted(tags.stream()).stream()).toList();
+            // Tags can change when a world is joined, so only keep the list while on the title screen.
+            if (level != null) {
+                List<Option> result = entitySelectors;
+                entitySelectors = null;
+                return result;
+            }
+        }
+        return entitySelectors;
+    }
+
+    private static Option entityTagOption(ResourceLocation id) {
+        return new Option("#" + id, Component.translatable("mobsettings.ui.entityTag", "#" + id).getString());
+    }
+
+    private static String modName(String namespace) {
+        String name = ModList.get().getModContainerById(namespace).map(mod -> mod.getModInfo().getDisplayName()).orElse(namespace);
+        return Component.translatable("mobsettings.ui.entityMod", name).getString();
+    }
+
     static boolean isKnown(RuleType.Kind kind, String id) {
+        // Entity tags are datapack-driven, so only a mod's wildcard can be checked.
+        if (isSelector(kind, id)) {
+            return id.startsWith("#") ? ResourceLocation.tryParse(id.substring(1)) != null
+                    : selectors(kind).stream().anyMatch(o -> o.id().equals(id));
+        }
         ResourceLocation parsed = ResourceLocation.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
         if (parsed == null) return false;
         return switch (kind) {
             case ENTITY, SPAWNABLE_ENTITY -> options(kind, null).stream().anyMatch(o -> o.id().equals(parsed.toString()));
             case ITEM -> BuiltInRegistries.ITEM.containsKey(parsed);
-            case ATTRIBUTE -> BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
+            case ATTRIBUTE -> isAttribute(id);
             // Biomes, biome tags and dimensions are datapack-driven, so modded ones can't be listed from the title screen.
             case DIMENSION, BIOME -> true;
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> false;
+            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> false;
         };
     }
 
@@ -78,6 +134,42 @@ final class Suggestions {
         return sorted(BuiltInRegistries.ITEM.stream()
                 .filter(item -> item != Items.AIR)
                 .map(item -> new Option(BuiltInRegistries.ITEM.getKey(item).toString(), itemName(item))));
+    }
+
+    /** The enchantments the server told us about when in a world, otherwise the vanilla ones. */
+    static List<Option> enchantments() {
+        var level = Minecraft.getInstance().level;
+        if (level != null) {
+            return sorted(level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).listElementIds().map(key -> enchantmentOption(key.location())));
+        }
+        if (vanillaEnchantments == null) {
+            List<Option> found = new ArrayList<>();
+            for (Field field : Enchantments.class.getFields()) {
+                if (!Modifier.isStatic(field.getModifiers()) || field.getType() != ResourceKey.class) continue;
+                try {
+                    found.add(enchantmentOption(((ResourceKey<?>) field.get(null)).location()));
+                } catch (IllegalAccessException ignored) {}
+            }
+            vanillaEnchantments = sorted(found.stream());
+        }
+        return vanillaEnchantments;
+    }
+
+    private static Option enchantmentOption(ResourceLocation id) {
+        return new Option(id.toString(), Component.translatable("enchantment." + id.getNamespace() + "." + id.getPath()).getString());
+    }
+
+    /** Components that are saved with an item, except the ones the item editor has its own inputs for. */
+    static List<Option> dataComponents() {
+        if (dataComponents == null) {
+            List<String> own = List.of(ItemLine.DAMAGE, ItemLine.NAME, ItemLine.UNBREAKABLE, ItemLine.ENCHANTMENTS);
+            dataComponents = sorted(BuiltInRegistries.DATA_COMPONENT_TYPE.stream()
+                    .filter(type -> !type.isTransient())
+                    .map(type -> BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(type).toString())
+                    .filter(id -> !own.contains(id))
+                    .map(id -> new Option(id, id)));
+        }
+        return dataComponents;
     }
 
     // Item stacks need data components, which aren't bound on the title screen, so translate the ID directly.
@@ -106,12 +198,19 @@ final class Suggestions {
     }
 
     private static Holder<Attribute> attribute(String id) {
-        return BuiltInRegistries.ATTRIBUTE.getHolder(ResourceLocation.parse(id)).orElseThrow();
+        return BuiltInRegistries.ATTRIBUTE.getHolder(attributeId(id)).orElseThrow();
     }
 
     private static boolean isAttribute(String id) {
+        return attributeId(id) != null;
+    }
+
+    /** The registered ID for what was typed. Newer versions write max_health where this one has generic.max_health, and both work. */
+    private static @Nullable ResourceLocation attributeId(String id) {
         ResourceLocation parsed = ResourceLocation.tryParse(id);
-        return parsed != null && BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
+        if (parsed == null || BuiltInRegistries.ATTRIBUTE.containsKey(parsed)) return parsed;
+        ResourceLocation generic = parsed.withPath("generic." + parsed.getPath());
+        return BuiltInRegistries.ATTRIBUTE.containsKey(generic) ? generic : null;
     }
 
     /** Allowed {min, max} of an attribute, or null if it's unknown or unbounded. */
@@ -135,7 +234,14 @@ final class Suggestions {
     static String displayName(RuleType.Kind kind, String id) {
         if (id.equals("*")) return anyLabel(kind).getString();
         if (kind == RuleType.Kind.BIOME && id.startsWith("#")) return tagName(id);
-        return options(kind, null).stream().filter(o -> o.id().equals(id)).findFirst().map(Option::name).orElse(id);
+        if (isSelector(kind, id)) {
+            return id.startsWith("#") ? Component.translatable("mobsettings.ui.entityTag", id).getString()
+                    : modName(id.substring(0, id.length() - 2));
+        }
+        // Options are listed with their namespace, but the line may leave out minecraft:.
+        ResourceLocation parsed = ResourceLocation.tryParse(id);
+        String fullId = parsed == null ? id : parsed.toString();
+        return options(kind, null).stream().filter(o -> o.id().equals(fullId)).findFirst().map(Option::name).orElse(id);
     }
 
     static Component anyLabel(RuleType.Kind kind) {

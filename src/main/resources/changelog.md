@@ -1,58 +1,51 @@
-## Mob Settings for Minecraft 1.21.1 (NeoForge)
+## Mob Settings 1.1.0 for Minecraft 1.21.1 (NeoForge)
 
-The first release of Mob Settings for 1.21.1. Every option starts empty, so the mod does nothing until you configure it.
+Brings 1.21.1 up to the 1.4.0 (26.1.2) feature set. Existing config lines keep working.
 
-## Features
+## New features
 
-- **Extra drops** (`extraDrops`): add items to a mob's drops.
-  - Format: `entity_id|item_id|count|chance` (chance 0.0-1.0).
-  - `*` as the entity applies to every mob, including modded ones.
-  - `dropOnlyOnPlayerKill` (on by default) only gives extra drops when a player gets the kill.
-  - Example: `minecraft:zombie|minecraft:diamond|2|0.5`
-- **Remove drops** (`removeDrops`): remove items from a mob's drops.
-  - Format: `entity_id|item_id` or `entity_id|item_id|chance`. Chance (0.0-1.0) is optional and defaults to always.
-  - `*` works for the entity (every mob) or the item (every drop).
-  - Runs before `extraDrops`, so extra drops are never removed. `*|*` plus a few `extraDrops` lines leaves only those items.
-  - Example: `minecraft:zombie|minecraft:rotten_flesh`
-- **Add spawns** (`addSpawns`): add natural spawns to biomes.
-  - Format: `entity_id|dimension_id|biome|weight|min_group|max_group`
-  - Example: `minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10|1|3`
-- **Remove spawns** (`removeSpawns`): remove a mob's natural spawns, or reduce them by a percentage.
-  - Format: `entity_id|dimension_id|biome` or `entity_id|dimension_id|biome|percent` (0-100).
-  - Runs before `addSpawns`, so your added spawns are never removed. `*|*|*` plus a few `addSpawns` lines leaves only those mobs spawning.
-  - Affects spawns from vanilla, datapacks and other mods.
-  - Example: `minecraft:zombie|*|*|50` halves zombie spawns everywhere.
-- **Spawn rules per dimension and biome tag**:
-  - Use `*` as the dimension for every dimension, or a dimension ID to set up the same biome differently in each dimension (e.g. a modded dimension that reuses vanilla biomes). Rules for every dimension are applied first, then rules for one dimension on top.
-  - Use `*` as the biome for every biome, or a biome tag such as `#minecraft:is_nether` or `#c:is_forest`.
-  - Lines without a dimension (`entity_id|biome|...`) also work and apply to every dimension.
-- **Attribute overrides** (`attributeOverrides`): set a mob's base attribute (health, speed, armor, size, etc.) when it spawns or loads.
-  - Format: `entity_id|attribute_id|value`. Values are kept within the attribute's valid range.
-  - The config file lists every vanilla attribute mobs can have, with its range. Modded attributes work by ID.
-  - Raising max health also spawns new mobs at full health.
-  - Example: `minecraft:zombie|minecraft:generic.max_health|40`
-- **Despawn ranges** (`despawnRanges`): set how far from the nearest player a mob can be before it despawns.
-  - Format: `entity_id|range`
-  - Example: `minecraft:zombie|32`
-- **Light level spawn restrictions** (`lightSpawnRestrictions`): only allow natural spawns within a light level range.
-  - Format: `entity_id|minLight|maxLight` (0-15)
-  - Example: `minecraft:zombie|0|7`
-- In `attributeOverrides` and `despawnRanges`, a line for a specific mob wins over a `*` line, whatever the order.
+- **Item data on extra drops**: `extraDrops` items can carry data, written the way `/give` does: `item_id[component=value,...]`. The config screen has a Data menu for enchantments, durability, name, unbreakable and any other component, and items can be copied and pasted as text. Pasting onto a drop that has an item keeps that item and takes only the data, and whole `/give` commands can be pasted too.
+  - Example: `minecraft:zombie|minecraft:diamond_sword[damage=100,enchantments={sharpness:5}]|1|0.5`
+- **Entity data on added spawns**: `addSpawns` mobs can carry data: `entity_id{key:value,...}`. The config screen has a Data menu for each equipment slot and its drop chance, the mob's name, never despawning and any other NBT, and both a single slot and all of the data can be copied and pasted.
+  - Example: `minecraft:zombie{equipment:{head:{id:'minecraft:iron_helmet'}},drop_chances:{head:0.5}}|minecraft:overworld|?|20`
+  - A spawned mob can't be traced back to its line, so data is rolled using the line's share of that mob's spawn weight where it spawns. Only natural and chunk-generation spawns get data.
+- **Entity tags and whole mods**: the entity in a rule can be an entity tag (`#c:bosses`) or every mob from a mod (`othermod:*`), as well as one mob or `*`. This works everywhere except the mob in `addSpawns`. Where several lines could apply to a mob, the narrowest wins: its own ID, then a tag, then `modid:*`, then `*`.
+- **Spawn group sizes**: the new `spawnGroupSizes` list changes how many of a mob spawn together in the spawns that already exist: `entity_id|[dimension_id]|[biome]|min_group|[max_group]`.
+  - Example: `minecraft:zombie|1|1`
+- **Damage modifiers**: the new `damageModifiers` list multiplies the damage a mob deals and takes: `entity_id|[dealt]|[taken]|[dimension_id]`. Arrows and other projectiles count for whoever fired them.
+  - Example: `minecraft:zombie|?|0.5|minecraft:the_nether`
+- **Experience modifiers**: the new `experienceModifiers` list multiplies the experience a mob drops: `entity_id|[dimension_id]|multiplier`. The dimension is where the mob dies.
+  - Example: `minecraft:zombie|minecraft:the_nether|2.5`
+- **Per-dimension attributes**: `attributeOverrides` takes an optional dimension after the entity: `entity_id|[dimension_id]|attribute_id|value`. The dimension is where the mob first spawned, and its stats don't change if it travels.
+  - Example: `minecraft:zombie|minecraft:the_nether|minecraft:generic.attack_damage|6`
+- **More dimensions and biomes**: `removeDrops` and `extraDrops` take an optional dimension at the end, where the mob dies. `despawnRanges` takes an optional dimension, and `lightSpawnRestrictions` an optional dimension and biome.
+  - Example: `minecraft:skeleton|minecraft:bone|?|minecraft:the_nether`
+- **Looting on extra drops**: `extraDrops` lines can end with `T` to let Looting add 0 to 1 extra items per level. `F` or leaving it out means no bonus.
+  - Example: `minecraft:zombie|minecraft:diamond|2|0.5|T`
+- **Optional fields**: many fields can be left off the end of a line, or skipped with `?` to set a later one. The config screen lets you leave them blank too.
+- **Default namespace**: IDs without a namespace use `minecraft`, so `zombie` means `minecraft:zombie`.
 
-## In-game config screen
+## Changes
 
-- Every option can be edited from the Mods menu with the Config button.
-- List options open an entry editor with an input per field and a searchable list of entities, items, biomes, biome tags and attributes (attributes are filtered to the chosen mob).
-- Each entry is shown as a plain sentence (e.g. "Zombie drops 1 Diamond (5% chance)") with the raw config line underneath.
-- Hover a field or its label for an explanation, and hover an attribute in the list to see what it does. Number fields show their allowed range, and attribute values also show the mob's normal value.
-- Invalid entries are highlighted in red, and the editor won't save a line until it's valid.
-- Spawn options show a restart prompt, since biome spawns only update when the world reloads.
+- `removeSpawns` also stops mobs that code spawns instead of a biome's spawn list: phantoms, cats, pillager patrols, the wandering trader, village sieges and raids, as well as structure spawns (fortresses, monuments and so on) for every-dimension lines. A percent also cuts patrols, the trader, sieges and raids. Mobs you add with `addSpawns` are never removed. Spawner blocks and trial spawners are still unaffected.
+- `addSpawns` mobs ignore their usual spawn rules (such as ground type and light level) wherever the line applies, so a chicken added to the Nether really spawns there. This also applies to that mob's existing spawns in those places. End a line with `T` to keep the usual rules.
+- `attributeOverrides` apply as a modifier instead of replacing the base value, so removing a line takes the change off a mob the next time it loads. Mobs saved by an older version keep the value they were given.
+- `*` in `attributeOverrides` no longer affects players. Add a `minecraft:player` line to change their attributes.
+- Config files are upgraded once when loaded: spawn and attribute lines without a dimension are rewritten with a `*` dimension. They mean the same as before.
+- A `removeSpawns` line that is only `*` is ignored with a warning. Write `*|*|*` to remove every spawn.
+- A warning is logged when `minecraft:overworld` or `minecraft:the_nether` is used as a biome, since that matches nothing.
+- Long rule text in the config screen wraps instead of being cut off.
+- Light Level Spawn Restrictions is now called Light Spawn Restrictions, so the label fits on the main config screen.
 
-## Notes
+## Fixes
 
-- Invalid config lines are skipped and logged as a warning with the reason.
-- Entities that can't spawn naturally (armor stands, boats and other "misc" entities) are skipped in `addSpawns`.
-- Spawn rules for one dimension only apply to spawning after chunks generate, since a biome can be shared by several dimensions. Rules for every dimension (`*`) also affect animals placed during chunk generation.
-- Spawn rules for every dimension don't affect structure spawns (fortresses, ocean monuments, witch huts, pillager outposts); rules for one dimension do. Neither affects spawner blocks.
-- `removeDrops` also removes equipment and items a mob picked up.
-- On 1.21.1, attribute IDs include their category prefix, e.g. `minecraft:generic.max_health` or `minecraft:zombie.spawn_reinforcements`.
+- Drop rules no longer affect players. Before, `*` could remove a player's items on death.
+- Reducing a spawn by a percent no longer removes a mob with a low spawn weight entirely.
+- Mobs and players with a `minecraft:generic.max_health` override no longer heal fully when they change dimension.
+
+## Notes for 1.21.1
+
+- Attribute IDs include their category prefix, e.g. `minecraft:generic.max_health` or `minecraft:zombie.spawn_reinforcements`.
+- Equipment slots are head, chest, legs, feet, mainhand, offhand and body. There's no saddle slot on this version.
+- Names are JSON text, the same as in `/give` and `/summon`: `custom_name='"Big Sword"'` and `CustomName:'"Big Bob"'`. The Data menus handle this for you.
+- All rows of a rule list have the same height on this version, so one long rule makes every row taller.
