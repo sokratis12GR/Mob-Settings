@@ -55,6 +55,10 @@ public final class MobSpawns implements BiomeModifier {
                 // Removing from all spawn categories also handles modded categories.
                 for (MobCategory category : MobCategory.values()) reduce(spawns.getSpawner(category), rule);
             }
+            for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
+                if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
+                for (MobCategory category : MobCategory.values()) resize(spawns.getSpawner(category), rule);
+            }
         } else if (phase == Phase.MODIFY) {
             for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
                 if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
@@ -76,6 +80,16 @@ public final class MobSpawns implements BiomeModifier {
                 event.removeSpawnerData(entry);
                 Weighted<MobSpawnSettings.SpawnerData> reduced = reduced(entry, rule);
                 if (reduced != null) event.addSpawnerData(reduced);
+            }
+        }
+        for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
+            if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
+            if (biome == null) biome = level.getBiome(event.getPos());
+            if (!rule.biome().matches(biome)) continue;
+            for (Weighted<MobSpawnSettings.SpawnerData> entry : List.copyOf(event.getSpawnerDataList())) {
+                if (!Rules.matches(rule.entity(), entry.value().type())) continue;
+                event.removeSpawnerData(entry);
+                event.addSpawnerData(new Weighted<>(resized(entry.value(), rule), entry.weight()));
             }
         }
         for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
@@ -166,6 +180,17 @@ public final class MobSpawns implements BiomeModifier {
             Weighted<MobSpawnSettings.SpawnerData> reduced = reduced(entry, rule);
             if (reduced != null) spawner.add(reduced.value(), reduced.weight());
         }
+    }
+
+    private static void resize(WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner, Rules.GroupSize rule) {
+        Predicate<Weighted<MobSpawnSettings.SpawnerData>> isTarget = entry -> Rules.matches(rule.entity(), entry.value().type());
+        List<Weighted<MobSpawnSettings.SpawnerData>> matched = spawner.getList().stream().filter(isTarget).toList();
+        spawner.removeIf(isTarget);
+        for (Weighted<MobSpawnSettings.SpawnerData> entry : matched) spawner.add(resized(entry.value(), rule), entry.weight());
+    }
+
+    private static MobSpawnSettings.SpawnerData resized(MobSpawnSettings.SpawnerData data, Rules.GroupSize rule) {
+        return new MobSpawnSettings.SpawnerData(data.type(), rule.min(), rule.max());
     }
 
     /** The entry with its weight cut by the rule's percent, or null only when the rule removes all of it. */

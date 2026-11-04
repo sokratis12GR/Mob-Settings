@@ -70,6 +70,10 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             "removeSpawns", new RuleType("removeSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), optionalDecimal("percent", 0, 100, "100")), -1, -1),
+            "spawnGroupSizes", new RuleType("spawnGroupSizes", List.of(
+                    picker("entity", Kind.SPAWNABLE_ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
+                    optionalPicker("biome", Kind.BIOME), integer("minGroup", 1, 1000),
+                    optionalInteger("maxGroup", 1, 1000, null)), 3, 4),
             "attributeOverrides", new RuleType("attributeOverrides", List.of(
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     picker("attribute", Kind.ATTRIBUTE, false),
@@ -90,6 +94,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         return switch (key) {
             case "addSpawns" -> SpawnLines.addSpawn(line);
             case "removeSpawns" -> SpawnLines.removeSpawn(line);
+            case "spawnGroupSizes" -> SpawnLines.groupSize(line);
             case "attributeOverrides" -> SpawnLines.attribute(line);
             case "experienceModifiers" -> SpawnLines.experience(line);
             default -> SpawnLines.pad(line, fields.size());

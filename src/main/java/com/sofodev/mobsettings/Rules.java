@@ -32,6 +32,7 @@ final class Rules {
     record ExtraDrop(EntityRule entity, Item item, int count, double chance, boolean looting, @Nullable Identifier dimension) {}
     record RemoveSpawn(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
     record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
+    record GroupSize(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, int min, int max) {}
     record AttributeOverride(EntityRule entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
     record ExperienceModifier(EntityRule entity, @Nullable Identifier dimension, double multiplier) {}
     record DespawnRange(EntityRule entity, double range, @Nullable Identifier dimension) {}
@@ -97,6 +98,13 @@ final class Rules {
         if (max < min) throw new Invalid("max group is lower than min group");
         return new AddSpawn(type, dimension(f[1]), biome(f[2]), integer(f[3], "weight", 1, 100000), min, max,
                 !SpawnLines.isDefault(f[6]) && flag(f[6], "use spawn rules"));
+    });
+    static final Cache<GroupSize> GROUP_SIZES = new Cache<>("spawnGroupSizes", MSConfig.GROUP_SIZES, line -> {
+        String[] f = fields(SpawnLines.groupSize(line), 5, 5);
+        int min = integer(f[3], "min group", 1, 1000);
+        int max = SpawnLines.isDefault(f[4]) ? min : integer(f[4], "max group", 1, 1000);
+        if (max < min) throw new Invalid("max group is lower than min group");
+        return new GroupSize(entity(f[0]), dimension(f[1]), biome(f[2]), min, max);
     });
     static final Cache<AttributeOverride> ATTRIBUTE_OVERRIDES = new Cache<>("attributeOverrides", MSConfig.ATTRIBUTE_OVERRIDES, line -> {
         String[] f = fields(SpawnLines.attribute(line), 4, 4);
