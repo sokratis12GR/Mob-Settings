@@ -108,6 +108,8 @@ public final class MSConfig {
                 "For the same attribute, a line for a specific mob wins over a * line, then a line for one dimension wins",
                 "over a line for every dimension.",
                 "Raising max_health also fills a newly spawned mob's health to the new maximum.",
+                "The override is applied as a modifier, so removing a line takes it off a mob the next time it loads.",
+                "Mobs that already had a value set by an older version of this mod keep it.",
                 "Modded attributes work too, by their registry ID.",
                 "",
                 "Vanilla attributes every mob has (valid range):",
