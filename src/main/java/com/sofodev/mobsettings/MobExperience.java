@@ -15,7 +15,7 @@ public final class MobExperience {
         int bestSpecificity = -1;
         for (Rules.ExperienceModifier rule : Rules.EXPERIENCE_MODIFIERS.get()) {
             if (!Rules.matchesMob(rule.entity(), entity.getType()) || !Rules.matches(rule.dimension(), dimension)) continue;
-            int specificity = (rule.entity() != null ? 2 : 0) + (rule.dimension() != null ? 1 : 0);
+            int specificity = rule.entity().specificity() * 2 + (rule.dimension() != null ? 1 : 0);
             if (specificity >= bestSpecificity) {
                 best = rule;
                 bestSpecificity = specificity;

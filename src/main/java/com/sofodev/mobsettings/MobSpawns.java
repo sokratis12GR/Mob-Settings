@@ -23,6 +23,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import net.neoforged.neoforge.common.world.MobSpawnSettingsBuilder;
+import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -56,6 +57,10 @@ public final class MobSpawns implements BiomeModifier {
                 // Every category the biome defines, which also covers modded categories. Undefined ones have no list (null).
                 for (MobCategory category : spawns.getSpawnerTypes()) reduce(spawns.getSpawner(category), rule);
             }
+            for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
+                if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
+                for (MobCategory category : spawns.getSpawnerTypes()) resize(spawns.getSpawner(category), rule);
+            }
         } else if (phase == Phase.MODIFY) {
             for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
                 if (rule.dimension() != null || !rule.biome().matches(biome)) continue;
@@ -77,6 +82,16 @@ public final class MobSpawns implements BiomeModifier {
                 event.removeSpawnerData(entry);
                 Weighted<MobSpawnSettings.SpawnerData> reduced = reduced(entry, rule);
                 if (reduced != null) event.addSpawnerData(reduced);
+            }
+        }
+        for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
+            if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
+            if (biome == null) biome = level.getBiome(event.getPos());
+            if (!rule.biome().matches(biome)) continue;
+            for (Weighted<MobSpawnSettings.SpawnerData> entry : List.copyOf(event.getSpawnerDataList())) {
+                if (!Rules.matches(rule.entity(), entry.value().type())) continue;
+                event.removeSpawnerData(entry);
+                event.addSpawnerData(new Weighted<>(resized(entry.value(), rule), entry.weight()));
             }
         }
         for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
@@ -106,6 +121,42 @@ public final class MobSpawns implements BiomeModifier {
         }
     }
 
+    /**
+     * Phantoms, cats, patrols, the wandering trader, sieges and raids are spawned by code instead of a biome's spawn
+     * list, so removal rules reach them here. A partial percent only rolls for patrols and events: natural spawns
+     * already had their weight cut, and rolling again would cut it twice.
+     */
+    public static void onFinalizeSpawn(FinalizeSpawnEvent event) {
+        EntitySpawnReason reason = event.getSpawnType();
+        boolean rolls = reason == EntitySpawnReason.EVENT || reason == EntitySpawnReason.PATROL;
+        if (!rolls && reason != EntitySpawnReason.NATURAL) return;
+        EntityType<?> type = event.getEntity().getType();
+        ServerLevelAccessor level = event.getLevel();
+        Identifier dimension = level.getLevel().dimension().identifier();
+        BlockPos pos = BlockPos.containing(event.getX(), event.getY(), event.getZ());
+        Holder<Biome> biome = null;
+        double keep = 1;
+        boolean matched = false;
+        for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
+            if (!Rules.matches(rule.entity(), type) || !Rules.matches(rule.dimension(), dimension)) continue;
+            if (rule.keep() > 0 && !rolls) continue;
+            if (biome == null) biome = level.getBiome(pos);
+            if (!rule.biome().matches(biome)) continue;
+            keep *= rule.keep();
+            matched = true;
+        }
+        if (!matched || isAdded(type, dimension, biome)) return;
+        if (keep <= 0 || event.getEntity().getRandom().nextDouble() >= keep) event.setSpawnCancelled(true);
+    }
+
+    /** Whether an addSpawns line covers the mob here, since added spawns are never removed. */
+    private static boolean isAdded(EntityType<?> type, Identifier dimension, Holder<Biome> biome) {
+        for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+            if (rule.entity() == type && Rules.matches(rule.dimension(), dimension) && rule.biome().matches(biome)) return true;
+        }
+        return false;
+    }
+
     private static boolean isNaturalSpawn(EntitySpawnReason reason) {
         return reason == EntitySpawnReason.NATURAL || reason == EntitySpawnReason.CHUNK_GENERATION;
     }
@@ -133,10 +184,23 @@ public final class MobSpawns implements BiomeModifier {
         }
     }
 
-    /** The entry with its weight cut by the rule's percent, or null once nothing is left. */
+    private static void resize(WeightedList.Builder<MobSpawnSettings.SpawnerData> spawner, Rules.GroupSize rule) {
+        Predicate<Weighted<MobSpawnSettings.SpawnerData>> isTarget = entry -> Rules.matches(rule.entity(), entry.value().type());
+        List<Weighted<MobSpawnSettings.SpawnerData>> matched = spawner.getList().stream().filter(isTarget).toList();
+        spawner.removeIf(isTarget);
+        for (Weighted<MobSpawnSettings.SpawnerData> entry : matched) spawner.add(resized(entry.value(), rule), entry.weight());
+    }
+
+    private static MobSpawnSettings.SpawnerData resized(MobSpawnSettings.SpawnerData data, Rules.GroupSize rule) {
+        return new MobSpawnSettings.SpawnerData(data.type(), UniformInt.of(rule.min(), rule.max()));
+    }
+
+    /** The entry with its weight cut by the rule's percent, or null only when the rule removes all of it. */
     private static @Nullable Weighted<MobSpawnSettings.SpawnerData> reduced(Weighted<MobSpawnSettings.SpawnerData> entry, Rules.RemoveSpawn rule) {
-        int weight = (int) Math.round(entry.weight() * rule.keep());
-        return weight > 0 ? new Weighted<>(entry.value(), weight) : null;
+        if (rule.keep() <= 0) return null;
+        // A partial cut never rounds a small weight down to nothing.
+        int weight = Math.max(1, (int) Math.round(entry.weight() * rule.keep()));
+        return new Weighted<>(entry.value(), weight);
     }
 
     private static MobSpawnSettings.SpawnerData spawnerData(Rules.AddSpawn rule) {

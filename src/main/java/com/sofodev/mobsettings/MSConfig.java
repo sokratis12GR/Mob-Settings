@@ -15,7 +15,9 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ADD_SPAWNS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_SPAWNS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_DROPS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> GROUP_SIZES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ATTRIBUTE_OVERRIDES;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> DAMAGE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DESPAWN_RANGES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LIGHT_SPAWN_RESTRICTIONS;
@@ -28,27 +30,41 @@ public final class MSConfig {
                 "Used to upgrade this file when the format changes. Don't edit this.",
                 "",
                 "In the lists below, fields in [brackets] are optional. Leave them off the end of a line, or write ? to",
-                "skip one and set a later field. IDs without a namespace use minecraft, so zombie means minecraft:zombie.")
+                "skip one and set a later field. IDs without a namespace use minecraft, so zombie means minecraft:zombie.",
+                "",
+                "Wherever a list takes an entity_id (except the mob in addSpawns), it can also be:",
+                "  *            every mob (players are never included)",
+                "  modid:*      every mob from one mod, e.g. minecraft:* or othermod:*",
+                "  #tag         every mob in an entity type tag, e.g. #minecraft:skeletons or #c:bosses",
+                "In attributeOverrides, experienceModifiers and despawnRanges only the narrowest line applies to a mob:",
+                "its own ID, then a tag, then modid:*, then *. The other lists apply every line that matches.")
                 .defineInRange("configVersion", 1, 1, Integer.MAX_VALUE);
         REMOVE_DROPS = b.comment(
-                "Remove drops from a mob before they spawn: entity_id|item_id|[chance].",
+                "Remove drops from a mob when it dies: entity_id|item_id|[chance]|[dimension_id].",
                 "Runs before extraDrops, so extra drops are never removed. For example, \"*|*\" plus a few",
                 "extraDrops entries replaces every mob's drops with only those items.",
-                "Chance (0.0 to 1.0) defaults to 1.0 (always remove).",
+                "Chance (0.0 to 1.0) defaults to 1.0 (always remove). Dimension is where the mob dies and defaults to every dimension.",
+                "Players are never affected.",
                 "Use * as the entity ID to affect ALL living entities, or as the item ID to strip every drop.",
                 "Note: this also removes equipment and items the mob picked up (e.g. a player's gear a zombie grabbed).",
                 "Example: minecraft:zombie|minecraft:rotten_flesh",
-                "Example: minecraft:skeleton|minecraft:bone|0.5")
+                "Example: minecraft:skeleton|minecraft:bone|0.5",
+                "Example: minecraft:skeleton|minecraft:bone|?|minecraft:the_nether")
                 .defineListAllowEmpty("removeDrops", List.of(), () -> "", o -> o instanceof String);
         DROP_ONLY_ON_PLAYER_KILL = b.comment("Require a player credited with the kill to award configured extra drops.")
                 .define("dropOnlyOnPlayerKill", true);
         EXTRA_DROPS = b.comment(
-                "Extra drops, added after removeDrops: entity_id|item_id|[count]|[chance]|[looting].",
-                "Count defaults to 1 and chance (0.0 to 1.0) to 1.0 (always drop).",
+                "Extra drops, added after removeDrops: entity_id|item_id|[count]|[chance]|[looting]|[dimension_id].",
+                "Count defaults to 1 and chance (0.0 to 1.0) to 1.0 (always drop). Dimension is where the mob dies and defaults to every dimension.",
                 "Use * as the entity ID to affect ALL living entities (including other mods).",
                 "Set looting to T to let Looting affect the drop: each level adds 0 to 1 extra items. F or leaving it out means no bonus.",
+                "The item can carry data the way /give writes it: item_id[component=value,...], for enchantments, durability,",
+                "a custom name and so on. Quotes need a backslash in this file, or use single quotes. A line whose data the",
+                "game rejects logs a warning and drops nothing.",
                 "Example: minecraft:zombie|minecraft:diamond|2|0.5",
+                "Example: minecraft:zombie|minecraft:diamond_sword[damage=100,enchantments={sharpness:5}]|1|0.5",
                 "Example: minecraft:zombie|minecraft:diamond|?|0.5|T",
+                "Example: minecraft:zombie|minecraft:diamond|?|?|?|minecraft:the_end",
                 "Example: othermod:boss|minecraft:nether_star|1|1.0")
                 .defineListAllowEmpty("extraDrops", List.of(), () -> "", o -> o instanceof String);
         REMOVE_SPAWNS = b.comment(
@@ -61,9 +77,12 @@ public final class MSConfig {
                 "Runs before addSpawns, so added spawns are never removed. For example, \"*|minecraft:the_nether|*\"",
                 "plus a few addSpawns entries for the Nether leaves only those mobs spawning there.",
                 "Rules for every dimension (*) apply first; rules for one dimension are applied on top of them.",
-                "Applies to vanilla, datapack, and other mods' biome spawns. Does not affect spawner blocks.",
-                "Rules for every dimension don't affect structure spawns (fortresses, monuments, witch huts, outposts);",
-                "rules for one dimension do.",
+                "Applies to vanilla, datapack, and other mods' biome spawns. Does not affect spawner blocks, trial spawners,",
+                "spawn eggs, commands or breeding.",
+                "Mobs spawned by code instead of a biome's spawn list are covered too: phantoms, cats, pillager patrols,",
+                "the wandering trader, village sieges and raids. Removing one entirely stops it, and a percent also cuts",
+                "patrols, the trader, sieges and raids by that much. Phantoms and cats can only be removed entirely.",
+                "Structure spawns (fortresses, monuments, witch huts, outposts) are removed entirely the same way.",
                 "Example: minecraft:creeper|minecraft:plains",
                 "Example: minecraft:zombie|50",
                 "Example: minecraft:zombie|minecraft:the_nether|?",
@@ -82,12 +101,31 @@ public final class MSConfig {
                 "generate. Rules for one dimension only affect spawning afterwards, since a biome can be used in",
                 "several dimensions.",
                 "Entities in the MISC category (e.g. armor stands, boats) cannot naturally spawn and are skipped.",
+                "The mob can carry data the way /summon writes it: entity_id{key:value,...}, merged onto it once it has spawned,",
+                "for worn equipment (equipment:{head:{id:'minecraft:iron_helmet'}}), drop_chances, CustomName and so on.",
+                "Slots you don't set keep the gear the mob would normally spawn with. UUID, Pos, Motion, Rotation and id are ignored.",
+                "A spawn can't be traced back to its line, so data is rolled using the line's share of that mob's spawn weight",
+                "where it spawns: a line of weight 20 next to an existing spawn of weight 80 gives data to about 1 in 5.",
+                "Remove the mob's other spawns there with removeSpawns to give it to all of them.",
+                "Only natural and chunk-generation spawns get data, not spawner blocks, spawn eggs, commands or patrols.",
                 "Example: othermod:forest_beast|minecraft:forest|20|1|2",
+                "Example: minecraft:zombie{equipment:{head:{id:'minecraft:iron_helmet'}},drop_chances:{head:0.5}}|minecraft:overworld|?|20",
                 "Example: minecraft:blaze|minecraft:the_nether|?|10|1|3",
                 "Example: minecraft:blaze|minecraft:the_nether|minecraft:nether_wastes|10",
                 "Example: minecraft:cow|minecraft:overworld|#minecraft:is_forest|10|2|4|T")
                 .worldRestart()
                 .defineListAllowEmpty("addSpawns", List.of(), () -> "", o -> o instanceof String);
+        GROUP_SIZES = b.comment(
+                "Change how many mobs spawn together in the spawns that already exist: entity_id|[dimension_id]|[biome]|min_group|[max_group].",
+                "Max group defaults to the min group. Dimension and biome default to all of them, the same as writing *.",
+                "Biome tags (#...) work too, and a single ID after the entity is the biome, as in removeSpawns.",
+                "Runs after removeSpawns and before addSpawns, so spawns you add keep the group size you gave them.",
+                "Rules for every dimension (*) edit the biomes themselves; rules for one dimension edit the spawn list as",
+                "mobs spawn, the same as in removeSpawns. The weight is unchanged, and so is any spawn the mob doesn't have.",
+                "Example: minecraft:zombie|1|1",
+                "Example: minecraft:sheep|minecraft:overworld|#minecraft:is_forest|4|8")
+                .worldRestart()
+                .defineListAllowEmpty("spawnGroupSizes", List.of(), () -> "", o -> o instanceof String);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|[dimension_id]|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",
@@ -98,6 +136,8 @@ public final class MSConfig {
                 "For the same attribute, a line for a specific mob wins over a * line, then a line for one dimension wins",
                 "over a line for every dimension.",
                 "Raising max_health also fills a newly spawned mob's health to the new maximum.",
+                "The override is applied as a modifier, so removing a line takes it off a mob the next time it loads.",
+                "Mobs that already had a value set by an older version of this mod keep it.",
                 "Modded attributes work too, by their registry ID.",
                 "",
                 "Vanilla attributes every mob has (valid range):",
@@ -132,6 +172,19 @@ public final class MSConfig {
                 "Example: minecraft:zombie|minecraft:max_health|40",
                 "Example: minecraft:zombie|minecraft:the_nether|minecraft:attack_damage|6")
                 .defineListAllowEmpty("attributeOverrides", List.of(), () -> "", o -> o instanceof String);
+        DAMAGE_MODIFIERS = b.comment(
+                "Multiply the damage a mob deals and takes: entity_id|[dealt]|[taken]|[dimension_id] (0 to 1000).",
+                "Dealt scales the damage the mob causes, including arrows and other projectiles it shoots. Taken scales the damage it receives.",
+                "Leave one off or write ? to keep it as it is, but set at least one. 0 means no damage; 2 doubles it.",
+                "Dimension is where the damage happens and defaults to every dimension. Use * for every mob except players",
+                "(use minecraft:player for them).",
+                "For each of dealt and taken only the narrowest line that sets it applies: its own ID, then a tag, then",
+                "modid:*, then *, and for the same mob a line for one dimension beats a line for every dimension.",
+                "This changes the damage before armor and enchantments reduce it.",
+                "Example: minecraft:zombie|1.5",
+                "Example: minecraft:zombie|?|0.5|minecraft:the_nether",
+                "Example: minecraft:player|?|2")
+                .defineListAllowEmpty("damageModifiers", List.of(), () -> "", o -> o instanceof String);
         EXPERIENCE_MODIFIERS = b.comment(
                 "Multiply the experience a mob drops: entity_id|[dimension_id]|multiplier (0 to 1000; 0 means no experience).",
                 "Use * as the entity ID for every mob except players (use minecraft:player for them).",
@@ -145,17 +198,20 @@ public final class MSConfig {
                 "Example: *|minecraft:the_end|0")
                 .defineListAllowEmpty("experienceModifiers", List.of(), () -> "", o -> o instanceof String);
         DESPAWN_RANGES = b.comment(
-                "Override natural despawn distance (in blocks from the nearest player): entity_id|range.",
+                "Override natural despawn distance (in blocks from the nearest player): entity_id|range|[dimension_id].",
                 "Entities closer than range are kept loaded; entities farther are force-despawned.",
-                "A line for a specific mob wins over a * line.",
-                "Example: minecraft:zombie|32")
+                "Dimension is where the mob is and defaults to every dimension. A line for a specific mob wins over a * line, and for the same",
+                "mob a line for one dimension wins over a line for every dimension.",
+                "Example: minecraft:zombie|32",
+                "Example: minecraft:zombie|64|minecraft:the_nether")
                 .defineListAllowEmpty("despawnRanges", List.of(), () -> "", o -> o instanceof String);
         LIGHT_SPAWN_RESTRICTIONS = b.comment(
-                "Restrict natural spawning to a light level range: entity_id|[minLight]|[maxLight] (0-15).",
-                "Min light defaults to 0 and max light to 15.",
+                "Restrict natural spawning to a light level range: entity_id|[minLight]|[maxLight]|[dimension_id]|[biome] (0-15).",
+                "Min light defaults to 0 and max light to 15. Dimension and biome default to all of them; biome tags (#...) work too.",
                 "Cancels the spawn if the block's light level falls outside the range.",
                 "Example: minecraft:zombie|0|7",
-                "Example: minecraft:zombie|?|7")
+                "Example: minecraft:zombie|?|7",
+                "Example: minecraft:zombie|0|7|minecraft:overworld|#minecraft:is_forest")
                 .defineListAllowEmpty("lightSpawnRestrictions", List.of(), () -> "", o -> o instanceof String);
         SPEC = b.build();
     }

@@ -24,6 +24,7 @@ final class RuleEditScreen extends Screen {
     private static final int ROW_HEIGHT = 34;
     private static final int LABEL_X = 20;
     private static final int BOX_X = LABEL_X + 90;
+    private static final int DATA_BUTTON_WIDTH = 40;
 
     private final Screen parent;
     private final RuleType type;
@@ -50,8 +51,14 @@ final class RuleEditScreen extends Screen {
         for (int i = 0; i < type.fields().size(); i++) {
             RuleType.Field field = type.fields().get(i);
             int index = i;
-            EditBox box = new EditBox(font, BOX_X, TOP + i * rowHeight(), boxWidth, 20, fieldLabel(field));
-            box.setMaxLength(256);
+            boolean hasData = i == type.dataField();
+            EditBox box = new EditBox(font, BOX_X, TOP + i * rowHeight(), hasData ? boxWidth - DATA_BUTTON_WIDTH - 2 : boxWidth, 20, fieldLabel(field));
+            box.setMaxLength(hasData ? 32500 : 256);
+            if (hasData) {
+                addRenderableWidget(Button.builder(Component.translatable("mobsettings.ui.data.button"), b -> openData(index))
+                        .bounds(BOX_X + boxWidth - DATA_BUTTON_WIDTH, TOP + i * rowHeight(), DATA_BUTTON_WIDTH, 20)
+                        .tooltip(Tooltip.create(Component.translatable("mobsettings.ui.help.data." + type.key()))).build());
+            }
             box.setValue(values[i]);
             box.setHint(hint(field));
             box.setTooltip(Tooltip.create(help(field)));
@@ -79,6 +86,17 @@ final class RuleEditScreen extends Screen {
         setActiveField(type.fields().get(firstPicker).isPicker() ? firstPicker : -1);
         setInitialFocus(boxes.get(firstPicker));
         revalidate();
+    }
+
+    /** Opens the menu for the field's data. Coming back rebuilds this screen from the values. */
+    private void openData(int index) {
+        String value = values[index];
+        if (type.key().equals("extraDrops")) {
+            minecraft.gui.setScreen(new ItemDataScreen(this, value, true, text -> values[index] = text));
+        } else {
+            String id = SpawnLines.fieldId(value);
+            minecraft.gui.setScreen(new EntityDataScreen(this, SpawnLines.fieldData(value), data -> values[index] = id + data));
+        }
     }
 
     /** Rows shrink on short screens so rules with many fields stay above the error line and buttons. */
@@ -109,8 +127,9 @@ final class RuleEditScreen extends Screen {
         String value = values[index];
         if (field.isPicker()) {
             if (value.isEmpty() || type.validateField(index, values) != null) return null;
-            String name = Suggestions.displayName(field.kind(), value);
-            return name.equals(value) ? null : Component.literal(name);
+            String id = index == type.dataField() ? SpawnLines.fieldId(value) : value;
+            String name = Suggestions.displayName(field.kind(), id);
+            return name.equals(id) ? null : Component.literal(name);
         }
         double[] range = type.range(index, values);
         if (field.kind() == RuleType.Kind.ATTRIBUTE_VALUE) {
@@ -141,11 +160,16 @@ final class RuleEditScreen extends Screen {
             return;
         }
         RuleType.Field field = type.fields().get(activeField);
-        String query = values[activeField].toLowerCase(Locale.ROOT);
+        String query = (activeField == type.dataField() ? SpawnLines.fieldId(values[activeField]) : values[activeField]).toLowerCase(Locale.ROOT);
         String entityContext = field.kind() == RuleType.Kind.ATTRIBUTE ? values[0] : null;
         List<Suggestions.Option> matches = new ArrayList<>();
         if (field.wildcard() && "*".contains(query)) {
             matches.add(new Suggestions.Option("*", Suggestions.anyLabel(field.kind()).getString()));
+        }
+        if (field.wildcard()) {
+            for (Suggestions.Option option : Suggestions.selectors(field.kind())) {
+                if (option.matches(query)) matches.add(option);
+            }
         }
         for (Suggestions.Option option : Suggestions.options(field.kind(), entityContext)) {
             if (option.matches(query)) matches.add(option);
@@ -156,7 +180,8 @@ final class RuleEditScreen extends Screen {
     private void pick(Suggestions.Option option) {
         if (activeField < 0) return;
         EditBox box = boxes.get(activeField);
-        box.setValue(option.id());
+        // Picking another ID keeps the field's data.
+        box.setValue(activeField == type.dataField() ? option.id() + SpawnLines.fieldData(values[activeField]) : option.id());
         int next = activeField + 1;
         if (next < boxes.size()) {
             setFocused(boxes.get(next));

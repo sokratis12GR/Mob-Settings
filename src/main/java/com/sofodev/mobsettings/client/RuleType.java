@@ -57,9 +57,11 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
     static final Map<String, RuleType> TYPES = Map.of(
             "extraDrops", new RuleType("extraDrops", List.of(
                     picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, false),
-                    optionalInteger("count", 1, 100000, "1"), optionalChance(), optionalFlag("looting")), -1, -1),
+                    optionalInteger("count", 1, 100000, "1"), optionalChance(), optionalFlag("looting"),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "removeDrops", new RuleType("removeDrops", List.of(
-                    picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, true), optionalChance()), -1, -1),
+                    picker("entity", Kind.ENTITY, true), picker("item", Kind.ITEM, true), optionalChance(),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "addSpawns", new RuleType("addSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, false), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), integer("weight", 1, 100000),
@@ -68,34 +70,52 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             "removeSpawns", new RuleType("removeSpawns", List.of(
                     picker("entity", Kind.SPAWNABLE_ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     optionalPicker("biome", Kind.BIOME), optionalDecimal("percent", 0, 100, "100")), -1, -1),
+            "spawnGroupSizes", new RuleType("spawnGroupSizes", List.of(
+                    picker("entity", Kind.SPAWNABLE_ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
+                    optionalPicker("biome", Kind.BIOME), integer("minGroup", 1, 1000),
+                    optionalInteger("maxGroup", 1, 1000, null)), 3, 4),
             "attributeOverrides", new RuleType("attributeOverrides", List.of(
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     picker("attribute", Kind.ATTRIBUTE, false),
                     new Field("value", Kind.ATTRIBUTE_VALUE, false, false, -Double.MAX_VALUE, Double.MAX_VALUE, false, null)), -1, -1),
+            "damageModifiers", new RuleType("damageModifiers", List.of(
+                    picker("entity", Kind.ENTITY, true), optionalDecimal("dealt", 0, 1000, "1"),
+                    optionalDecimal("taken", 0, 1000, "1"), optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "experienceModifiers", new RuleType("experienceModifiers", List.of(
                     picker("entity", Kind.ENTITY, true), optionalPicker("dimension", Kind.DIMENSION),
                     decimal("multiplier", 0, 1000)), -1, -1),
             "despawnRanges", new RuleType("despawnRanges", List.of(
-                    picker("entity", Kind.ENTITY, true), decimal("range", 1, 1024)), -1, -1),
+                    picker("entity", Kind.ENTITY, true), decimal("range", 1, 1024),
+                    optionalPicker("dimension", Kind.DIMENSION)), -1, -1),
             "lightSpawnRestrictions", new RuleType("lightSpawnRestrictions", List.of(
                     picker("entity", Kind.ENTITY, true), optionalInteger("minLight", 0, 15, "0"),
-                    optionalInteger("maxLight", 0, 15, "15")), 1, 2));
+                    optionalInteger("maxLight", 0, 15, "15"), optionalPicker("dimension", Kind.DIMENSION),
+                    optionalPicker("biome", Kind.BIOME)), 1, 2));
 
     /** The line with every field in place, the same way the server reads it. */
     private String layout(String line) {
         return switch (key) {
             case "addSpawns" -> SpawnLines.addSpawn(line);
             case "removeSpawns" -> SpawnLines.removeSpawn(line);
+            case "spawnGroupSizes" -> SpawnLines.groupSize(line);
             case "attributeOverrides" -> SpawnLines.attribute(line);
             case "experienceModifiers" -> SpawnLines.experience(line);
-            case "despawnRanges" -> line;
             default -> SpawnLines.pad(line, fields.size());
+        };
+    }
+
+    /** The field that can carry item or entity data after its ID, or -1 for rules without one. */
+    int dataField() {
+        return switch (key) {
+            case "extraDrops" -> 1;
+            case "addSpawns" -> 0;
+            default -> -1;
         };
     }
 
     /** One value per field; a skipped optional field is empty. */
     String[] split(String line) {
-        String[] parts = layout(line).split("\\|", -1);
+        String[] parts = SpawnLines.split(layout(line));
         String[] values = new String[fields.size()];
         for (int i = 0; i < values.length; i++) {
             values[i] = i < parts.length && !SpawnLines.isDefault(parts[i]) ? parts[i].trim() : "";
@@ -130,7 +150,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
 
     /** Returns null when valid, otherwise a translation key describing the first problem. */
     String validate(String line) {
-        String[] raw = layout(line).split("\\|", -1);
+        String[] raw = SpawnLines.split(layout(line));
         long required = fields.stream().filter(f -> !f.optional()).count();
         if (raw.length < required || raw.length > fields.size()) return "mobsettings.ui.error.fieldCount";
         String[] values = split(line);
@@ -143,6 +163,7 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             return "mobsettings.ui.error.maxBelowMin";
         }
         if (key.equals("removeSpawns") && SpawnLines.removesEverything(line)) return "mobsettings.ui.error.removesEverything";
+        if (key.equals("damageModifiers") && values[1].isEmpty() && values[2].isEmpty()) return "mobsettings.ui.error.noDamage";
         return null;
     }
 
@@ -150,8 +171,13 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         Field field = fields.get(index);
         String value = values[index];
         if (value.isEmpty()) return field.optional() ? null : "mobsettings.ui.error.required";
+        if (index == dataField()) {
+            if (!dataValid(value)) return "mobsettings.ui.error.badData";
+            value = SpawnLines.fieldId(value);
+        }
         if (field.isPicker()) {
             if (value.equals("*")) return field.wildcard() ? null : "mobsettings.ui.error.noWildcard";
+            if (Suggestions.isSelector(field.kind(), value) && !field.wildcard()) return "mobsettings.ui.error.noWildcard";
             return Suggestions.isKnown(field.kind(), value) ? null : "mobsettings.ui.error.unknownId";
         }
         if (field.kind() == Kind.FLAG) {
@@ -170,6 +196,23 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
         return null;
     }
 
+    private boolean dataValid(String value) {
+        String data = SpawnLines.fieldData(value);
+        if (data.isEmpty()) return true;
+        if (key.equals("extraDrops")) {
+            ItemLine item = ItemLine.parse(value);
+            return item != null && item.problem() == null;
+        }
+        EntityLine entity = data.startsWith("{") ? EntityLine.parse(data) : null;
+        return entity != null && entity.problem() == null;
+    }
+
+    private String pickerName(int index, String value) {
+        Field field = fields.get(index);
+        if (index != dataField() || SpawnLines.fieldData(value).isEmpty()) return Suggestions.displayName(field.kind(), value);
+        return Component.translatable("mobsettings.ui.note.withData", Suggestions.displayName(field.kind(), SpawnLines.fieldId(value))).getString();
+    }
+
     /** A readable sentence for a line, e.g. "Zombie drops 1 Diamond (5% chance)"; null if the line is invalid. */
     @Nullable Component describe(String line) {
         if (validate(line) != null) return null;
@@ -179,14 +222,17 @@ record RuleType(String key, List<Field> fields, int minIndex, int maxIndex) {
             Field field = fields.get(i);
             String value = values[i].isEmpty() ? (field.isPicker() ? "*" : field.fallback()) : values[i];
             args[i] = value == null ? ""
-                    : field.isPicker() ? Suggestions.displayName(field.kind(), value)
+                    : field.isPicker() ? pickerName(i, value)
                     : field.percent() ? format(Double.parseDouble(value) * 100) + "%"
                     : value;
         }
         if (minIndex >= 0 && values[maxIndex].isEmpty() && fields.get(maxIndex).fallback() == null) args[maxIndex] = args[minIndex];
         // Some rules read differently when their last field is set. An explicit F means the same as leaving the flag out.
-        String lastValue = values[values.length - 1];
-        boolean off = fields.getLast().kind() == Kind.FLAG && lastValue.equalsIgnoreCase("F");
+        // Dimension and biome only say where, so the field before them decides.
+        int last = values.length - 1;
+        while (last > 0 && (fields.get(last).kind() == Kind.DIMENSION || fields.get(last).kind() == Kind.BIOME)) last--;
+        String lastValue = values[last];
+        boolean off = fields.get(last).kind() == Kind.FLAG && lastValue.equalsIgnoreCase("F");
         String sentence = "mobsettings.ui.describe." + key;
         boolean variant = !lastValue.isEmpty() && !off && Language.getInstance().has(sentence + ".optional");
         return Component.translatable(variant ? sentence + ".optional" : sentence, args);
