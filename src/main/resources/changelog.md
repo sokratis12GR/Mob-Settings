@@ -1,6 +1,6 @@
 ## Mob Settings 1.1.0 for Minecraft 1.21.1 (NeoForge)
 
-Brings 1.21.1 up to the 1.4.0 (26.1.2) feature set. Existing config lines keep working.
+Brings 1.21.1 up to the 1.4.1 (26.1.2) feature set. Existing config lines keep working.
 
 ## New features
 
