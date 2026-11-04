@@ -1,5 +1,6 @@
 ## Changes
 
+- `despawnRanges` no longer removes persistent mobs, such as name-tagged ones or ones set to never despawn.
 - `extraDrops` items can now carry data, written the way `/give` does: `item_id[component=value,...]`. The config screen has a Data menu for enchantments, durability, name, unbreakable and any other component, and items can be copied and pasted as text. Pasting onto a drop that has an item keeps that item and takes only the data, and whole `/give` commands can be pasted too.
   - Example: `minecraft:zombie|minecraft:diamond_sword[damage=100,enchantments={sharpness:5}]|1|0.5`
 - `addSpawns` mobs can now carry data, written the way `/summon` does: `entity_id{key:value,...}`. The config screen has a Data menu for each equipment slot and its drop chance, the mob's name, never despawning and any other NBT, and both a single slot and all of the data can be copied and pasted.
