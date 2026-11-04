@@ -50,7 +50,7 @@ final class Suggestions {
             case ATTRIBUTE -> attributeOptions(entityContext);
             case DIMENSION -> dimensionOptions();
             case BIOME -> biomeOptions();
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> List.of();
+            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> List.of();
         };
     }
 
@@ -63,7 +63,7 @@ final class Suggestions {
             case ATTRIBUTE -> BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
             // Biomes, biome tags and dimensions are datapack-driven, so modded ones can't be listed from the title screen.
             case DIMENSION, BIOME -> true;
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE -> false;
+            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> false;
         };
     }
 
@@ -135,7 +135,10 @@ final class Suggestions {
     static String displayName(RuleType.Kind kind, String id) {
         if (id.equals("*")) return anyLabel(kind).getString();
         if (kind == RuleType.Kind.BIOME && id.startsWith("#")) return tagName(id);
-        return options(kind, null).stream().filter(o -> o.id().equals(id)).findFirst().map(Option::name).orElse(id);
+        // Options are listed with their namespace, but the line may leave out minecraft:.
+        Identifier parsed = Identifier.tryParse(id);
+        String fullId = parsed == null ? id : parsed.toString();
+        return options(kind, null).stream().filter(o -> o.id().equals(fullId)).findFirst().map(Option::name).orElse(id);
     }
 
     static Component anyLabel(RuleType.Kind kind) {

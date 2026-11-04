@@ -1,5 +1,6 @@
 package com.sofodev.mobsettings.client;
 
+import com.sofodev.mobsettings.SpawnLines;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -55,7 +56,7 @@ final class RuleEditScreen extends Screen {
             box.setHint(hint(field));
             box.setTooltip(Tooltip.create(help(field)));
             box.setResponder(value -> {
-                values[index] = value.trim();
+                values[index] = SpawnLines.isDefault(value) ? "" : value.trim();
                 // Attribute matches depend on the chosen entity, so entity edits refresh them too.
                 boolean attributeActive = activeField >= 0 && type.fields().get(activeField).kind() == RuleType.Kind.ATTRIBUTE;
                 if (index == activeField || (index == 0 && attributeActive)) refreshSuggestions();
@@ -96,8 +97,8 @@ final class RuleEditScreen extends Screen {
     }
 
     private static Component hint(RuleType.Field field) {
-        String key = field.isPicker() && field.wildcard() ? "mobsettings.ui.hint.wildcard"
-                : field.optional() ? "mobsettings.ui.hint.optional"
+        String key = field.optional() ? "mobsettings.ui.hint.optional"
+                : field.isPicker() && field.wildcard() ? "mobsettings.ui.hint.wildcard"
                 : null;
         return key == null ? Component.empty() : Component.translatable(key).withStyle(ChatFormatting.DARK_GRAY);
     }
@@ -113,7 +114,7 @@ final class RuleEditScreen extends Screen {
         }
         double[] range = type.range(index, values);
         if (field.kind() == RuleType.Kind.ATTRIBUTE_VALUE) {
-            Double defaultValue = Suggestions.attributeDefault(values[0], values[1]);
+            Double defaultValue = Suggestions.attributeDefault(values[0], values[2]);
             if (defaultValue == null) return Component.translatable("mobsettings.ui.note.pickAttribute");
             Component normal = Component.translatable("mobsettings.ui.note.default", RuleType.format(defaultValue));
             return range == null ? normal

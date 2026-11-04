@@ -14,6 +14,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.jspecify.annotations.Nullable;
@@ -27,10 +28,11 @@ final class Rules {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     record RemoveDrop(@Nullable EntityType<?> entity, @Nullable Item item, double chance) {}
-    record ExtraDrop(@Nullable EntityType<?> entity, Item item, int count, double chance) {}
+    record ExtraDrop(@Nullable EntityType<?> entity, Item item, int count, double chance, boolean looting) {}
     record RemoveSpawn(@Nullable EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
     record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max) {}
-    record AttributeOverride(@Nullable EntityType<?> entity, Holder<Attribute> attribute, double value) {}
+    record AttributeOverride(@Nullable EntityType<?> entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
+    record ExperienceModifier(@Nullable EntityType<?> entity, @Nullable Identifier dimension, double multiplier) {}
     record DespawnRange(@Nullable EntityType<?> entity, double range) {}
     record LightRestriction(@Nullable EntityType<?> entity, int min, int max) {}
 
@@ -43,35 +45,42 @@ final class Rules {
     }
 
     static final Cache<RemoveDrop> REMOVE_DROPS = new Cache<>("removeDrops", MSConfig.REMOVE_DROPS, line -> {
-        String[] f = fields(line, 2, 3);
+        String[] f = fields(SpawnLines.pad(line, 3), 3, 3);
         Item item = f[1].equals("*") ? null : registered(BuiltInRegistries.ITEM, f[1], "item");
-        return new RemoveDrop(entity(f[0]), item, f.length == 3 ? decimal(f[2], "chance", 0, 1) : 1);
+        return new RemoveDrop(entity(f[0]), item, SpawnLines.isDefault(f[2]) ? 1 : decimal(f[2], "chance", 0, 1));
     });
     static final Cache<ExtraDrop> EXTRA_DROPS = new Cache<>("extraDrops", MSConfig.EXTRA_DROPS, line -> {
-        String[] f = fields(line, 4, 4);
+        String[] f = fields(SpawnLines.pad(line, 5), 5, 5);
         return new ExtraDrop(entity(f[0]), registered(BuiltInRegistries.ITEM, f[1], "item"),
-                integer(f[2], "count", 1, 100000), decimal(f[3], "chance", 0, 1));
+                SpawnLines.isDefault(f[2]) ? 1 : integer(f[2], "count", 1, 100000),
+                SpawnLines.isDefault(f[3]) ? 1 : decimal(f[3], "chance", 0, 1),
+                !SpawnLines.isDefault(f[4]) && flag(f[4], "looting"));
     });
     static final Cache<RemoveSpawn> REMOVE_SPAWNS = new Cache<>("removeSpawns", MSConfig.REMOVE_SPAWNS, line -> {
-        String[] f = fields(SpawnLines.upgradeRemove(line), 3, 4);
-        double percent = f.length == 4 ? decimal(f[3], "percent", 0, 100) : 100;
+        String[] f = fields(SpawnLines.removeSpawn(line), 4, 4);
+        if (SpawnLines.removesEverything(line)) throw new Invalid("this would remove every spawn; write *|*|* if that's intended");
+        double percent = SpawnLines.isDefault(f[3]) ? 100 : decimal(f[3], "percent", 0, 100);
         return new RemoveSpawn(entity(f[0]), dimension(f[1]), biome(f[2]), 1 - percent / 100);
     });
     static final Cache<AddSpawn> ADD_SPAWNS = new Cache<>("addSpawns", MSConfig.ADD_SPAWNS, line -> {
-        String[] f = fields(SpawnLines.upgradeAdd(line), 6, 6);
+        String[] f = fields(SpawnLines.addSpawn(line), 6, 6);
         EntityType<?> type = registered(BuiltInRegistries.ENTITY_TYPE, f[0], "entity");
         // Vanilla's SpawnerData ctor silently swaps MISC-category types to PIG; reject instead of spawning the wrong mob.
         if (type.getCategory() == MobCategory.MISC) throw new Invalid(f[0] + " can't spawn naturally");
-        int min = integer(f[4], "min group", 1, 1000);
-        int max = integer(f[5], "max group", 1, 1000);
+        int min = SpawnLines.isDefault(f[4]) ? 1 : integer(f[4], "min group", 1, 1000);
+        int max = SpawnLines.isDefault(f[5]) ? min : integer(f[5], "max group", 1, 1000);
         if (max < min) throw new Invalid("max group is lower than min group");
         return new AddSpawn(type, dimension(f[1]), biome(f[2]), integer(f[3], "weight", 1, 100000), min, max);
     });
     static final Cache<AttributeOverride> ATTRIBUTE_OVERRIDES = new Cache<>("attributeOverrides", MSConfig.ATTRIBUTE_OVERRIDES, line -> {
-        String[] f = fields(line, 3, 3);
-        Attribute attribute = registered(BuiltInRegistries.ATTRIBUTE, f[1], "attribute");
-        return new AttributeOverride(entity(f[0]), BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute),
-                decimal(f[2], "value", -Double.MAX_VALUE, Double.MAX_VALUE));
+        String[] f = fields(SpawnLines.attribute(line), 4, 4);
+        Attribute attribute = registered(BuiltInRegistries.ATTRIBUTE, f[2], "attribute");
+        return new AttributeOverride(entity(f[0]), dimension(f[1]), BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute),
+                decimal(f[3], "value", -Double.MAX_VALUE, Double.MAX_VALUE));
+    });
+    static final Cache<ExperienceModifier> EXPERIENCE_MODIFIERS = new Cache<>("experienceModifiers", MSConfig.EXPERIENCE_MODIFIERS, line -> {
+        String[] f = fields(SpawnLines.experience(line), 3, 3);
+        return new ExperienceModifier(entity(f[0]), dimension(f[1]), decimal(f[2], "multiplier", 0, 1000));
     });
     static final Cache<DespawnRange> DESPAWN_RANGES = new Cache<>("despawnRanges", MSConfig.DESPAWN_RANGES, line -> {
         String[] f = fields(line, 2, 2);
@@ -80,9 +89,9 @@ final class Rules {
         return new DespawnRange(entity(f[0]), range);
     });
     static final Cache<LightRestriction> LIGHT_SPAWN_RESTRICTIONS = new Cache<>("lightSpawnRestrictions", MSConfig.LIGHT_SPAWN_RESTRICTIONS, line -> {
-        String[] f = fields(line, 3, 3);
-        int min = integer(f[1], "min light", 0, 15);
-        int max = integer(f[2], "max light", 0, 15);
+        String[] f = fields(SpawnLines.pad(line, 3), 3, 3);
+        int min = SpawnLines.isDefault(f[1]) ? 0 : integer(f[1], "min light", 0, 15);
+        int max = SpawnLines.isDefault(f[2]) ? 15 : integer(f[2], "max light", 0, 15);
         if (max < min) throw new Invalid("max light is lower than min light");
         return new LightRestriction(entity(f[0]), min, max);
     });
@@ -90,7 +99,17 @@ final class Rules {
     private Rules() {}
 
     static boolean matches(@Nullable EntityType<?> rule, EntityType<?> actual) { return rule == null || rule == actual; }
+    /** Like {@link #matches(EntityType, EntityType)}, but players only match a rule that names them. */
+    static boolean matchesMob(@Nullable EntityType<?> rule, EntityType<?> actual) {
+        return rule == null ? actual != EntityType.PLAYER : rule == actual;
+    }
     static boolean matches(@Nullable Identifier rule, Identifier actual) { return rule == null || rule.equals(actual); }
+
+    private static boolean flag(String value, String name) {
+        if (value.equalsIgnoreCase("T")) return true;
+        if (value.equalsIgnoreCase("F")) return false;
+        throw new Invalid(name + " must be T or F");
+    }
 
     private static String[] fields(String line, int min, int max) {
         String[] fields = line.split("\\|", -1);
@@ -119,13 +138,18 @@ final class Rules {
 
     // Dimensions and biomes are datapack-driven and may not exist yet when this is parsed, so only the syntax is checked.
     private static @Nullable Identifier dimension(String value) {
-        return value.equals("*") ? null : id(value, "dimension");
+        return value.equals("*") || SpawnLines.isDefault(value) ? null : id(value, "dimension");
     }
 
     private static BiomeRule biome(String value) {
-        if (value.equals("*")) return new BiomeRule(null, null);
+        if (value.equals("*") || SpawnLines.isDefault(value)) return new BiomeRule(null, null);
         if (value.startsWith("#")) return new BiomeRule(null, TagKey.create(Registries.BIOME, id(value.substring(1), "biome tag")));
-        return new BiomeRule(id(value, "biome"), null);
+        Identifier id = id(value, "biome");
+        // A single ID in a spawn line is the biome. The End has a biome named after it, so only these two are mistakes.
+        if (id.equals(Level.OVERWORLD.identifier()) || id.equals(Level.NETHER.identifier())) {
+            LOGGER.warn("Spawn rule uses the dimension {} as a biome, so it matches nothing. To target the dimension, write entity|{}|?", id, id);
+        }
+        return new BiomeRule(id, null);
     }
 
     private static int integer(String value, String name, int min, int max) {
