@@ -11,6 +11,7 @@ public final class MobDespawn {
 
     public static void onMobDespawn(MobDespawnEvent event) {
         Mob mob = event.getEntity();
+        if (mob.isPersistenceRequired() || mob.requiresCustomPersistence()) return;
         // The most specific rule wins, wherever they are in the list: this mob, then a tag, then a mod, then *, and
         // for equally narrow mobs a rule for this dimension beats one for every dimension.
         // Between equally specific rules the first one wins.
