@@ -23,19 +23,43 @@ import org.slf4j.Logger;
 
 /**
  * Parsed config rules. Each list is parsed the first time it's used after a config (re)load, and invalid lines are
- * logged once and skipped. A null entity, item or dimension means the rule used {@code *}.
+ * logged once and skipped. A null item or dimension means the rule used {@code *}, and so does an {@link EntityRule} with nothing set.
  */
 final class Rules {
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    record RemoveDrop(@Nullable EntityType<?> entity, @Nullable Item item, double chance) {}
-    record ExtraDrop(@Nullable EntityType<?> entity, Item item, int count, double chance, boolean looting) {}
-    record RemoveSpawn(@Nullable EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
+    record RemoveDrop(EntityRule entity, @Nullable Item item, double chance) {}
+    record ExtraDrop(EntityRule entity, Item item, int count, double chance, boolean looting) {}
+    record RemoveSpawn(EntityRule entity, @Nullable Identifier dimension, BiomeRule biome, double keep) {}
     record AddSpawn(EntityType<?> entity, @Nullable Identifier dimension, BiomeRule biome, int weight, int min, int max, boolean useSpawnRules) {}
-    record AttributeOverride(@Nullable EntityType<?> entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
-    record ExperienceModifier(@Nullable EntityType<?> entity, @Nullable Identifier dimension, double multiplier) {}
-    record DespawnRange(@Nullable EntityType<?> entity, double range) {}
-    record LightRestriction(@Nullable EntityType<?> entity, int min, int max) {}
+    record AttributeOverride(EntityRule entity, @Nullable Identifier dimension, Holder<Attribute> attribute, double value) {}
+    record ExperienceModifier(EntityRule entity, @Nullable Identifier dimension, double multiplier) {}
+    record DespawnRange(EntityRule entity, double range) {}
+    record LightRestriction(EntityRule entity, int min, int max) {}
+
+    /**
+     * Which entities a rule covers: one entity type, an {@code #entity_type_tag}, every entity of a mod
+     * ({@code modid:*}), or all of them ({@code *}, all fields null).
+     */
+    record EntityRule(@Nullable EntityType<?> type, @Nullable TagKey<EntityType<?>> tag, @Nullable String namespace) {
+        static final EntityRule ANY = new EntityRule(null, null, null);
+
+        boolean matches(EntityType<?> actual) {
+            if (type != null) return type == actual;
+            if (tag != null) return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(actual).is(tag);
+            return namespace == null || namespace.equals(BuiltInRegistries.ENTITY_TYPE.getKey(actual).getNamespace());
+        }
+
+        /** Players only match a rule that names them, never a tag, mod or {@code *}. */
+        boolean matchesMob(EntityType<?> actual) {
+            return actual == EntityTypes.PLAYER ? type == actual : matches(actual);
+        }
+
+        /** How narrowly the rule aims, for picking between rules: a named entity beats a tag, a tag beats a mod, a mod beats {@code *}. */
+        int specificity() {
+            return type != null ? 3 : tag != null ? 2 : namespace != null ? 1 : 0;
+        }
+    }
 
     /** A biome ID, a {@code #tag}, or {@code *}. */
     record BiomeRule(@Nullable Identifier id, @Nullable TagKey<Biome> tag) {
@@ -100,11 +124,9 @@ final class Rules {
 
     private Rules() {}
 
-    static boolean matches(@Nullable EntityType<?> rule, EntityType<?> actual) { return rule == null || rule == actual; }
-    /** Like {@link #matches(EntityType, EntityType)}, but players only match a rule that names them. */
-    static boolean matchesMob(@Nullable EntityType<?> rule, EntityType<?> actual) {
-        return rule == null ? actual != EntityTypes.PLAYER : rule == actual;
-    }
+    static boolean matches(EntityRule rule, EntityType<?> actual) { return rule.matches(actual); }
+    /** Like {@link #matches(EntityRule, EntityType)}, but players only match a rule that names them. */
+    static boolean matchesMob(EntityRule rule, EntityType<?> actual) { return rule.matchesMob(actual); }
     static boolean matches(@Nullable Identifier rule, Identifier actual) { return rule == null || rule.equals(actual); }
 
     private static boolean flag(String value, String name) {
@@ -134,8 +156,21 @@ final class Rules {
         return registry.getValue(id);
     }
 
-    private static @Nullable EntityType<?> entity(String value) {
-        return value.equals("*") ? null : registered(BuiltInRegistries.ENTITY_TYPE, value, "entity");
+    private static EntityRule entity(String value) {
+        if (value.equals("*")) return EntityRule.ANY;
+        if (value.startsWith("#")) {
+            // Tags are datapack-driven and may not exist yet when this is parsed, so only the syntax is checked.
+            return new EntityRule(null, TagKey.create(Registries.ENTITY_TYPE, id(value.substring(1), "entity tag")), null);
+        }
+        if (value.endsWith(":*")) {
+            String namespace = value.substring(0, value.length() - 2);
+            id(namespace + ":x", "mod");
+            if (BuiltInRegistries.ENTITY_TYPE.keySet().stream().noneMatch(key -> key.getNamespace().equals(namespace))) {
+                throw new Invalid("no entities from " + namespace);
+            }
+            return new EntityRule(null, null, namespace);
+        }
+        return new EntityRule(registered(BuiltInRegistries.ENTITY_TYPE, value, "entity"), null, null);
     }
 
     // Dimensions and biomes are datapack-driven and may not exist yet when this is parsed, so only the syntax is checked.

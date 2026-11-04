@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -28,6 +29,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
+import net.neoforged.fml.ModList;
 import org.jspecify.annotations.Nullable;
 
 /** Searchable option sources for the rule editor's picker fields. */
@@ -38,7 +40,7 @@ final class Suggestions {
         }
     }
 
-    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes;
+    private static @Nullable List<Option> entities, spawnableEntities, items, attributes, vanillaBiomes, entitySelectors;
 
     private Suggestions() {}
 
@@ -54,7 +56,60 @@ final class Suggestions {
         };
     }
 
+    /** Whether a picker value is an entity tag or a whole mod ({@code modid:*}) rather than a single entity. */
+    static boolean isSelector(RuleType.Kind kind, String value) {
+        return isEntity(kind) && (value.startsWith("#") || value.endsWith(":*"));
+    }
+
+    private static boolean isEntity(RuleType.Kind kind) {
+        return kind == RuleType.Kind.ENTITY || kind == RuleType.Kind.SPAWNABLE_ENTITY;
+    }
+
+    /** Entity tags (written #tag) and whole mods (written modid:*), for fields that accept more than one entity. */
+    static List<Option> selectors(RuleType.Kind kind) {
+        if (!isEntity(kind)) return List.of();
+        if (entitySelectors == null) {
+            List<Option> tags = new ArrayList<>();
+            var level = Minecraft.getInstance().level;
+            if (level != null) {
+                level.registryAccess().lookupOrThrow(Registries.ENTITY_TYPE).listTagIds()
+                        .forEach(tag -> tags.add(entityTagOption(tag.location())));
+            } else {
+                for (Field field : EntityTypeTags.class.getFields()) {
+                    if (!Modifier.isStatic(field.getModifiers()) || field.getType() != TagKey.class) continue;
+                    try {
+                        tags.add(entityTagOption(((TagKey<?>) field.get(null)).location()));
+                    } catch (IllegalAccessException ignored) {}
+                }
+            }
+            Stream<Option> mods = BuiltInRegistries.ENTITY_TYPE.keySet().stream().map(Identifier::getNamespace).distinct()
+                    .map(namespace -> new Option(namespace + ":*", modName(namespace)));
+            entitySelectors = Stream.concat(sorted(mods).stream(), sorted(tags.stream()).stream()).toList();
+            // Tags can change when a world is joined, so only keep the list while on the title screen.
+            if (level != null) {
+                List<Option> result = entitySelectors;
+                entitySelectors = null;
+                return result;
+            }
+        }
+        return entitySelectors;
+    }
+
+    private static Option entityTagOption(Identifier id) {
+        return new Option("#" + id, Component.translatable("mobsettings.ui.entityTag", "#" + id).getString());
+    }
+
+    private static String modName(String namespace) {
+        String name = ModList.get().getModContainerById(namespace).map(mod -> mod.getModInfo().getDisplayName()).orElse(namespace);
+        return Component.translatable("mobsettings.ui.entityMod", name).getString();
+    }
+
     static boolean isKnown(RuleType.Kind kind, String id) {
+        // Entity tags are datapack-driven, so only a mod's wildcard can be checked.
+        if (isSelector(kind, id)) {
+            return id.startsWith("#") ? Identifier.tryParse(id.substring(1)) != null
+                    : selectors(kind).stream().anyMatch(o -> o.id().equals(id));
+        }
         Identifier parsed = Identifier.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
         if (parsed == null) return false;
         return switch (kind) {
@@ -135,6 +190,10 @@ final class Suggestions {
     static String displayName(RuleType.Kind kind, String id) {
         if (id.equals("*")) return anyLabel(kind).getString();
         if (kind == RuleType.Kind.BIOME && id.startsWith("#")) return tagName(id);
+        if (isSelector(kind, id)) {
+            return id.startsWith("#") ? Component.translatable("mobsettings.ui.entityTag", id).getString()
+                    : modName(id.substring(0, id.length() - 2));
+        }
         // Options are listed with their namespace, but the line may leave out minecraft:.
         Identifier parsed = Identifier.tryParse(id);
         String fullId = parsed == null ? id : parsed.toString();

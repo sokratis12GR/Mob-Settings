@@ -8,7 +8,10 @@
 - A warning is logged when `minecraft:overworld` or `minecraft:the_nether` is used as a biome, since that matches nothing.
 - Long rule text in the config screen now wraps instead of being cut off, with each row growing to fit its text.
 - Light Level Spawn Restrictions is now called Light Spawn Restrictions, so the label fits on the main config screen.
+- The entity in a rule can now be an entity tag (`#c:bosses`) or every mob from a mod (`othermod:*`), as well as one mob or `*`. This works everywhere except the mob in `addSpawns`. Where several lines could apply to a mob, the narrowest wins: its own ID, then a tag, then `modid:*`, then `*`.
 
 ## Fixes
 
+- Drop rules no longer affect players. Before, `*` could remove a player's items on death.
+- Reducing a spawn by a percent no longer removes a mob with a low spawn weight entirely.
 - The update checker now reads the mod's update URL, so new versions are reported in-game.
