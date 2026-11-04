@@ -8,6 +8,8 @@
 - The entity in a rule can now be an entity tag (`#c:bosses`) or every mob from a mod (`othermod:*`), as well as one mob or `*`. This works everywhere except the mob in `addSpawns`. Where several lines could apply to a mob, the narrowest wins: its own ID, then a tag, then `modid:*`, then `*`.
 - `removeSpawns` now also stops mobs that code spawns instead of a biome's spawn list: phantoms, cats, pillager patrols, the wandering trader, village sieges and raids, as well as structure spawns (fortresses, monuments and so on) for every-dimension lines. A percent also cuts patrols, the trader, sieges and raids. Mobs you add with `addSpawns` are never removed. Spawner blocks and trial spawners are still unaffected.
 - `attributeOverrides` now apply as a modifier instead of replacing the base value, so removing a line takes the change off a mob the next time it loads. Mobs saved by an older version keep the value they were given.
+- `removeDrops` and `extraDrops` take an optional dimension at the end, where the mob dies. `despawnRanges` takes an optional dimension, and `lightSpawnRestrictions` an optional dimension and biome. Existing lines keep working.
+  - Example: `minecraft:skeleton|minecraft:bone|?|minecraft:the_nether`
 
 ## Fixes
 
