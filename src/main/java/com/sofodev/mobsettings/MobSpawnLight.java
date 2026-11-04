@@ -13,7 +13,7 @@ public final class MobSpawnLight {
         EntitySpawnReason reason = event.getSpawnType();
         if (reason != EntitySpawnReason.NATURAL && reason != EntitySpawnReason.CHUNK_GENERATION) return;
         for (Rules.LightRestriction rule : Rules.LIGHT_SPAWN_RESTRICTIONS.get()) {
-            if (!Rules.matches(rule.entity(), event.getEntity().getType())) continue;
+            if (!Rules.matchesMob(rule.entity(), event.getEntity().getType())) continue;
             BlockPos pos = BlockPos.containing(event.getX(), event.getY(), event.getZ());
             int light = event.getLevel().getMaxLocalRawBrightness(pos);
             if (light < rule.min() || light > rule.max()) {
