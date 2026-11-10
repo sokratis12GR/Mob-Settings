@@ -52,7 +52,7 @@ public final class MobSpawnData {
      * A spawned mob doesn't say which spawn entry made it, so this picks a line by its share of the mob's weight here.
      * The share not covered by a line, such as the mob's existing spawns, stays plain and returns null.
      */
-    private static Rules.@Nullable AddSpawn roll(List<Rules.AddSpawn> rules, EntityType<?> type, ResourceLocation dimension, Holder<Biome> biome, Mob mob) {
+    static Rules.@Nullable AddSpawn roll(List<Rules.AddSpawn> rules, EntityType<?> type, ResourceLocation dimension, Holder<Biome> biome, Mob mob) {
         // Lines for every dimension are already in the biome's list. Lines for one dimension are added to it as mobs spawn.
         double total = 0;
         for (MobSpawnSettings.SpawnerData entry : biome.value().getMobSettings().getMobs(type.getCategory()).unwrap()) {

@@ -32,6 +32,8 @@ public final class MobSettings {
         // Low priority so a result set by another mod is left alone.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnPlacementCheck);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onPositionCheck);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnClusterSize);
+        NeoForge.EVENT_BUS.addListener(MobSpawnsCommand::register);
         MobSpawns.register(modBus);
     }
 }
