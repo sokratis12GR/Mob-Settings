@@ -35,8 +35,9 @@ public final class MobSettingsConfigScreen extends ConfigurationScreen.Configura
         ModConfigSpec.ConfigValue<List<String>> rules = (ModConfigSpec.ConfigValue<List<String>>) (Object) list;
         Component tooltip = getTooltipComponent(key, null);
         Button button = Button.builder(Component.translatable(SECTION, Component.translatable(SECTION_TEXT)),
-                        b -> minecraft.setScreen(new RuleListScreen(this, type, rules.get(), updated -> {
-                            if (!updated.equals(rules.get())) {
+                        // getRaw: world-restart values keep their old cached value after set() until the world reloads.
+                        b -> minecraft.setScreen(new RuleListScreen(this, type, rules.getRaw(), updated -> {
+                            if (!updated.equals(rules.getRaw())) {
                                 rules.set(updated);
                                 onChanged(key);
                             }

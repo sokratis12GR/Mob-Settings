@@ -16,6 +16,7 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_SPAWNS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_DROPS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> GROUP_SIZES;
+    public static final ModConfigSpec.IntValue MAX_GROUP_PLACEMENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ATTRIBUTE_OVERRIDES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DAMAGE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
@@ -93,7 +94,9 @@ public final class MSConfig {
                 "Add natural spawns, after removeSpawns: entity_id|[dimension_id]|[biome]|weight|[min_group]|[max_group]|[use_spawn_rules].",
                 "Dimension and biome default to all of them, the same as writing *. Biome tags (#...) work too.",
                 "A single ID after the entity is the biome. To target a dimension, write entity_id|dimension_id|?|weight.",
-                "Min group defaults to 1, and max group to the min group.",
+                "Min group defaults to 1, and max group to the min group, up to maxGroupPlacement. A group only gets smaller",
+                "than the min when there isn't room for it around where it spawns.",
+                "Use /mobsettings spawns <entity> in game to see where a mob spawns once every rule is applied.",
                 "Added mobs ignore their usual spawn rules (such as ground type and light level) wherever the line applies, so",
                 "they spawn anywhere they fit. This includes that mob's existing spawns there, so an added zombie can also",
                 "spawn in daylight. Set use_spawn_rules to T to keep the mob's usual rules. F or leaving it out ignores them.",
@@ -126,6 +129,12 @@ public final class MSConfig {
                 "Example: minecraft:sheep|minecraft:overworld|#minecraft:is_forest|4|8")
                 .worldRestart()
                 .defineListAllowEmpty("spawnGroupSizes", List.of(), () -> "", o -> o instanceof String);
+        MAX_GROUP_PLACEMENT = b.comment(
+                "The most mobs one group from addSpawns or spawnGroupSizes can have, as a safety limit.",
+                "These groups are placed by this mod rather than vanilla, which stops at about 4 and rarely gets past 20.",
+                "Each group is placed at once, and the mob cap is only checked before it, so a big group goes past",
+                "the cap and can cause a short lag spike. Groups placed while chunks generate stay inside one chunk.")
+                .defineInRange("maxGroupPlacement", 256, 1, 1000);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|[dimension_id]|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",
