@@ -8,11 +8,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.util.random.Weighted;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.util.valueproviders.UniformInt;
+import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.SpawnPlacements;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.Level;
@@ -24,7 +28,9 @@ import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import net.neoforged.neoforge.common.world.MobSpawnSettingsBuilder;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
+import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
+import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -71,11 +77,15 @@ public final class MobSpawns implements BiomeModifier {
 
     public static void onPotentialSpawns(LevelEvent.PotentialSpawns event) {
         if (!(event.getLevel() instanceof Level level)) return;
-        Identifier dimension = level.dimension().identifier();
+        applyDimensionRules(event, level.dimension().identifier(), () -> level.getBiome(event.getPos()));
+    }
+
+    /** Applies the dimension-specific rules to a spawn list. The biome is only looked up if a rule needs it. */
+    static void applyDimensionRules(LevelEvent.PotentialSpawns event, Identifier dimension, Supplier<Holder<Biome>> biomeAt) {
         Holder<Biome> biome = null;
         for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
             if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
-            if (biome == null) biome = level.getBiome(event.getPos());
+            if (biome == null) biome = biomeAt.get();
             if (!rule.biome().matches(biome)) continue;
             for (Weighted<MobSpawnSettings.SpawnerData> entry : List.copyOf(event.getSpawnerDataList())) {
                 if (!Rules.matches(rule.entity(), entry.value().type())) continue;
@@ -86,7 +96,7 @@ public final class MobSpawns implements BiomeModifier {
         }
         for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
             if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
-            if (biome == null) biome = level.getBiome(event.getPos());
+            if (biome == null) biome = biomeAt.get();
             if (!rule.biome().matches(biome)) continue;
             for (Weighted<MobSpawnSettings.SpawnerData> entry : List.copyOf(event.getSpawnerDataList())) {
                 if (!Rules.matches(rule.entity(), entry.value().type())) continue;
@@ -97,10 +107,115 @@ public final class MobSpawns implements BiomeModifier {
         for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
             if (rule.dimension() == null || !rule.dimension().equals(dimension)) continue;
             if (rule.entity().getCategory() != event.getMobCategory()) continue;
-            if (biome == null) biome = level.getBiome(event.getPos());
+            if (biome == null) biome = biomeAt.get();
             if (!rule.biome().matches(biome)) continue;
             event.addSpawnerData(new Weighted<>(spawnerData(rule), rule.weight()));
         }
+    }
+
+    /**
+     * Vanilla places a group one try per member, all at the first spot's height and each step up to 5 blocks from the
+     * last, and stops after getMaxSpawnClusterSize() mobs, so large configured groups end up around 10 to 20.
+     * This fires right after vanilla adds a mob: for mobs a rule sizes, the rest of the group is placed here and vanilla
+     * is told to stop, so a group is never placed twice.
+     */
+    public static void onSpawnClusterSize(SpawnClusterSizeEvent event) {
+        Mob leader = event.getEntity();
+        // Only a mob vanilla has just added, not some other caller asking for the size.
+        if (!(leader.level() instanceof ServerLevel level) || !leader.isAddedToLevel() || leader.tickCount > 0) return;
+        int[] group = groupSize(leader, level);
+        if (group == null) return;
+        int size = group[0] + leader.getRandom().nextInt(1 + group[1] - group[0]);
+        placeGroup(level, leader, Math.min(size, MSConfig.MAX_GROUP_PLACEMENT.get()) - 1);
+        event.setSize(1);
+    }
+
+    /**
+     * The {min, max} for this mob here, or null when no rule sizes it. A spawn can't be traced back to its entry, so an
+     * addSpawns line is chosen by its share of the weight, as for spawn data. The rest of the weight uses the
+     * spawnGroupSizes line that applies last, or stays vanilla's when there is none.
+     */
+    private static int @Nullable [] groupSize(Mob mob, ServerLevel level) {
+        EntityType<?> type = mob.getType();
+        Identifier dimension = level.dimension().identifier();
+        Holder<Biome> biome = level.getBiome(mob.blockPosition());
+        List<Rules.AddSpawn> adds = new java.util.ArrayList<>();
+        for (Rules.AddSpawn rule : Rules.ADD_SPAWNS.get()) {
+            if (rule.entity() == type && Rules.matches(rule.dimension(), dimension) && rule.biome().matches(biome)) adds.add(rule);
+        }
+        Rules.GroupSize resize = groupRule(type, dimension, biome);
+        if (adds.isEmpty() && resize == null) return null;
+        Rules.AddSpawn chosen = null;
+        if (!adds.isEmpty()) {
+            MobSpawnSettings spawns = level.environmentAttributes().getValue(EnvironmentAttributes.NATURAL_MOB_SPAWNS, mob.blockPosition());
+            chosen = MobSpawnData.roll(adds, type, dimension, biome, spawns, mob);
+        }
+        if (chosen != null) return new int[] {chosen.min(), chosen.max()};
+        return resize == null ? null : new int[] {resize.min(), resize.max()};
+    }
+
+    /** The spawnGroupSizes line that wins here: dimension lines are applied after every-dimension ones, later lines after earlier. */
+    private static Rules.@Nullable GroupSize groupRule(EntityType<?> type, Identifier dimension, Holder<Biome> biome) {
+        Rules.GroupSize result = null;
+        for (boolean dimensional : new boolean[] {false, true}) {
+            for (Rules.GroupSize rule : Rules.GROUP_SIZES.get()) {
+                if ((rule.dimension() != null) != dimensional || !Rules.matches(rule.entity(), type)) continue;
+                if (Rules.matches(rule.dimension(), dimension) && rule.biome().matches(biome)) result = rule;
+            }
+        }
+        return result;
+    }
+
+    /** Whether this mod places the mob's groups here, for the spawns command. */
+    static boolean placesGroups(EntityType<?> type, Identifier dimension, Holder<Biome> biome) {
+        return isAdded(type, dimension, biome) || groupRule(type, dimension, biome) != null;
+    }
+
+    /**
+     * Places the rest of a group around its first mob, with the checks vanilla makes: the spawn rules (skipped where an
+     * addSpawns line says so), room to stand, NeoForge's position check and the finalize event, so removals, light
+     * restrictions and spawn data still apply to each member. Unlike vanilla it searches a few blocks up and down and
+     * widens with the group, so the min is reached unless the area is really full.
+     */
+    private static void placeGroup(ServerLevel level, Mob leader, int count) {
+        if (count <= 0) return;
+        EntityType<?> type = leader.getType();
+        RandomSource random = leader.getRandom();
+        BlockPos origin = leader.blockPosition();
+        int radius = 4 + (int) Math.ceil(Math.sqrt(count));
+        int placed = 0;
+        for (int attempt = 0; attempt < count * 8 && placed < count; attempt++) {
+            int x = origin.getX() + random.nextInt(2 * radius + 1) - radius;
+            int z = origin.getZ() + random.nextInt(2 * radius + 1) - radius;
+            BlockPos pos = standingSpot(level, type, x, origin.getY(), z, random);
+            // Vanilla never spawns within 24 blocks of a player.
+            if (pos == null || level.getNearestPlayer(x + 0.5, pos.getY(), z + 0.5, 24, false) != null) continue;
+            if (!(type.create(level, EntitySpawnReason.NATURAL) instanceof Mob mob)) return;
+            mob.snapTo(x + 0.5, pos.getY(), z + 0.5, random.nextFloat() * 360, 0);
+            if (!EventHooks.checkSpawnPosition(mob, level, EntitySpawnReason.NATURAL)) {
+                mob.discard();
+                continue;
+            }
+            EventHooks.finalizeMobSpawn(mob, level, level.getCurrentDifficultyAt(pos), EntitySpawnReason.NATURAL, null);
+            // Cancelled while finalizing, e.g. by a light restriction: that spot doesn't count.
+            if (mob.isSpawnCancelled()) continue;
+            level.addFreshEntityWithPassengers(mob);
+            placed++;
+        }
+    }
+
+    private static @Nullable BlockPos standingSpot(ServerLevel level, EntityType<?> type, int x, int y, int z, RandomSource random) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int i = 0; i <= 8; i++) {
+            // 0, +1, -1, +2, -2... so the leader's own height is tried first.
+            int dy = (i + 1) / 2 * (i % 2 == 1 ? 1 : -1);
+            pos.set(x, y + dy, z);
+            if (!level.isInWorldBounds(pos) || !level.isLoaded(pos)) continue;
+            if (!SpawnPlacements.isSpawnPositionOk(type, level, pos)) continue;
+            if (!SpawnPlacements.checkSpawnRules(type, level, EntitySpawnReason.NATURAL, pos, random)) continue;
+            if (level.noCollision(type.getSpawnAABB(x + 0.5, pos.getY(), z + 0.5))) return pos.immutable();
+        }
+        return null;
     }
 
     public static void onSpawnPlacementCheck(MobSpawnEvent.SpawnPlacementCheck event) {
@@ -129,7 +244,9 @@ public final class MobSpawns implements BiomeModifier {
     public static void onFinalizeSpawn(FinalizeSpawnEvent event) {
         EntitySpawnReason reason = event.getSpawnType();
         boolean rolls = reason == EntitySpawnReason.EVENT || reason == EntitySpawnReason.PATROL;
-        if (!rolls && reason != EntitySpawnReason.NATURAL) return;
+        // Chunk generation reads the biome's list directly, so only dimension rules need catching here.
+        boolean generating = reason == EntitySpawnReason.CHUNK_GENERATION;
+        if (!rolls && !generating && reason != EntitySpawnReason.NATURAL) return;
         EntityType<?> type = event.getEntity().getType();
         ServerLevelAccessor level = event.getLevel();
         Identifier dimension = level.getLevel().dimension().identifier();
@@ -140,6 +257,7 @@ public final class MobSpawns implements BiomeModifier {
         for (Rules.RemoveSpawn rule : Rules.REMOVE_SPAWNS.get()) {
             if (!Rules.matches(rule.entity(), type) || !Rules.matches(rule.dimension(), dimension)) continue;
             if (rule.keep() > 0 && !rolls) continue;
+            if (generating && rule.dimension() == null) continue;
             if (biome == null) biome = level.getBiome(pos);
             if (!rule.biome().matches(biome)) continue;
             keep *= rule.keep();
