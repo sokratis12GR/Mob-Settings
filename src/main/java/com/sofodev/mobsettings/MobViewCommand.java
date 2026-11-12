@@ -84,6 +84,10 @@ public final class MobViewCommand {
             context.reply(new MobNetwork.ViewEditResult(edit.apply(), false, error, edit.index(), edit.line()));
             return;
         }
+        if (!MobNetwork.tryUse(player)) {
+            context.reply(new MobNetwork.ViewEditResult(edit.apply(), false, "Too fast, try again in a moment.", edit.index(), edit.line()));
+            return;
+        }
         context.reply(edit.apply() ? apply(player, edit) : save(player, edit));
     }
 
@@ -108,6 +112,7 @@ public final class MobViewCommand {
         }
         MSConfig.ADD_SPAWNS.set(lines);
         MSConfig.SPEC.save();
+        MobLookups.clearCache();
         LogUtils.getLogger().info("{} saved addSpawns line {}: {}", player.getGameProfile().getName(), index + 1, edit.line());
         return new MobNetwork.ViewEditResult(false, true, "Saved as addSpawns line " + (index + 1), index, edit.line());
     }

@@ -137,7 +137,7 @@ public final class MSConfig {
                 "These groups are placed by this mod rather than vanilla, which stops at about 4 and rarely gets past 20.",
                 "Each group is placed at once, and the mob cap is only checked before it, so a big group goes past",
                 "the cap and can cause a short lag spike. Groups placed while chunks generate stay inside one chunk.")
-                .defineInRange("maxGroupPlacement", 256, 1, 1000);
+                .defineInRange("maxGroupPlacement", 64, 1, 128);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|[dimension_id]|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",

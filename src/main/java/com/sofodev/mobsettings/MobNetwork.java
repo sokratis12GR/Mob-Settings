@@ -6,6 +6,8 @@ import io.netty.buffer.ByteBuf;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +19,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -179,15 +182,41 @@ public final class MobNetwork {
         registrar.playToClient(ViewEditResult.TYPE, ViewEditResult.CODEC, (result, context) -> ClientView.receive(result));
     }
 
+    /** How many lookups or edits one player may send per second, so a modified client can't flood the server. */
+    private static final int PACKETS_PER_SECOND = 10;
+    /** Per player: {start of the current one-second window, packets sent in it}. */
+    private static final Map<UUID, long[]> PACKET_WINDOWS = new ConcurrentHashMap<>();
+
+    /** Whether the player may send another lookup or edit now; counts it if so. Runs on the server thread. */
+    static boolean tryUse(ServerPlayer player) {
+        long now = System.currentTimeMillis();
+        long[] window = PACKET_WINDOWS.computeIfAbsent(player.getUUID(), id -> new long[] {now, 0});
+        if (now - window[0] >= 1000) {
+            window[0] = now;
+            window[1] = 0;
+        }
+        return ++window[1] <= PACKETS_PER_SECOND;
+    }
+
+    static void forget(Player player) {
+        PACKET_WINDOWS.remove(player.getUUID());
+    }
+
+    static void clearCooldowns() {
+        PACKET_WINDOWS.clear();
+    }
+
     private static void handleRequest(Request request, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) return;
         if (!player.hasPermissions(Commands.LEVEL_GAMEMASTERS)) {
             context.reply(new Result(request.spawns(), request.entity(), Status.NO_PERMISSION.ordinal(), List.of(), List.of(), Map.of()));
             return;
         }
+        // Over the budget: dropped. The screen asks once per opened list or click, so a real client never gets near it.
+        if (!tryUse(player)) return;
         if (request.entity().equals(ALL)) {
             Map<String, Integer> counts = new HashMap<>();
-            (request.spawns() ? MobLookups.spawnCounts(player.server) : MobLookups.dropCounts(player.server))
+            (request.spawns() ? MobLookups.cachedSpawnCounts(player.server) : MobLookups.cachedDropCounts(player.server))
                     .forEach((type, count) -> counts.put(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString(), count));
             context.reply(new Result(request.spawns(), ALL, Status.OK.ordinal(), List.of(), List.of(), counts));
             return;

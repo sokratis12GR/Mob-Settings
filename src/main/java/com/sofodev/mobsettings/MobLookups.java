@@ -136,6 +136,27 @@ public final class MobLookups {
         return result;
     }
 
+    // The mob list's counts walk every loot table or every biome, so they're kept until a reload or config change.
+    private static volatile Map<EntityType<?>, Integer> cachedDropCounts, cachedSpawnCounts;
+
+    /** Forgets the cached counts; called on config reloads, /reload and server stop. */
+    public static void clearCache() {
+        cachedDropCounts = null;
+        cachedSpawnCounts = null;
+    }
+
+    public static Map<EntityType<?>, Integer> cachedDropCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = cachedDropCounts;
+        if (counts == null) cachedDropCounts = counts = Map.copyOf(dropCounts(server));
+        return counts;
+    }
+
+    public static Map<EntityType<?>, Integer> cachedSpawnCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = cachedSpawnCounts;
+        if (counts == null) cachedSpawnCounts = counts = Map.copyOf(spawnCounts(server));
+        return counts;
+    }
+
     /** For the mob list: how many items each mob's loot table can drop, for mobs that drop any. */
     public static Map<EntityType<?>, Integer> dropCounts(MinecraftServer server) {
         Map<EntityType<?>, Integer> counts = new HashMap<>();
