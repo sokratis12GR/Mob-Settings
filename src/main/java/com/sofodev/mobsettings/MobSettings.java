@@ -33,7 +33,10 @@ public final class MobSettings {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnPlacementCheck);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onPositionCheck);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnClusterSize);
+        NeoForge.EVENT_BUS.addListener(MobSettingsCommand::register);
         NeoForge.EVENT_BUS.addListener(MobSpawnsCommand::register);
+        NeoForge.EVENT_BUS.addListener(MobInspectCommand::register);
+        modBus.addListener(MobNetwork::register);
         MobSpawns.register(modBus);
     }
 }

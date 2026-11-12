@@ -64,6 +64,11 @@ repositories {
     mavenCentral()
 }
 
+dependencies {
+    // The rule list config screens. Local build until TheDragonLib 1.3.0 is released.
+    implementation files("../TheDragonLib/build/libs/thedragonlib-1.21.1-1.3.0-neo.jar")
+}
+
 tasks.named('processResources', ProcessResources).configure {
     def replaceProperties = [
             minecraft_version      : minecraft_version,
@@ -125,6 +130,10 @@ modrinth {
     loaders = ['neoforge']
 
     changelog = changelogText
+
+    dependencies {
+        required.project 'thedragonlib'
+    }
 }
 
 tasks.register('publishModrinth') {
@@ -153,6 +162,7 @@ tasks.register('publishCurseForge', net.darkhax.curseforgegradle.TaskPublishCurs
 
         mainFile.addGameVersion(minecraft_version.toString())
         mainFile.addEnvironment('Client', 'Server')
+        mainFile.addRequirement('thedragonlib')
     }
 }
 

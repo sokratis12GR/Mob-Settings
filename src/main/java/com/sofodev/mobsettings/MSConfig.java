@@ -22,6 +22,7 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DESPAWN_RANGES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LIGHT_SPAWN_RESTRICTIONS;
+    public static final ModConfigSpec.BooleanValue EXPERIMENTAL_INSPECT_SCREEN;
 
     private MSConfig() {}
 
@@ -220,6 +221,11 @@ public final class MSConfig {
                 "Example: minecraft:zombie|?|7",
                 "Example: minecraft:zombie|0|7|minecraft:overworld|#minecraft:is_forest")
                 .defineListAllowEmpty("lightSpawnRestrictions", List.of(), () -> "", o -> o instanceof String);
+        EXPERIMENTAL_INSPECT_SCREEN = b.comment(
+                "EXPERIMENTAL: /mobsettings inspect opens a screen instead of printing to chat: the mob in 3D with its gear,",
+                "where it spawns, what it drops (removed drops marked), and every rule that covers it. Gear can be copied as an",
+                "addSpawns line, saved to this file or applied to the live mob. Operators only. May change or break between versions.")
+                .define("experimentalInspectScreen", false);
         SPEC = b.build();
     }
 

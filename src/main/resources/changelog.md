@@ -1,12 +1,15 @@
-## Mob Settings 1.2.0 for Minecraft 1.21.1 (NeoForge)
+## 1.21.1 - 1.3.0
 
-Brings 1.21.1 up to the 1.5.0 (26.1.2) feature set.
-
-## Changes
-
-- Edits to `removeSpawns`, `addSpawns` and `spawnGroupSizes` in the config screen now show up straight away when you reopen the list. Before, the screen kept showing the old lines until the world restarted, so changes looked lost.
-- Group sizes from `addSpawns` and `spawnGroupSizes` now actually spawn. Vanilla stopped at about 4 and rarely got past 20, whatever the group size, so Mob Settings now places these groups itself. Spawn rules, removals, light restrictions and spawn data still apply to every member.
-- New `maxGroupPlacement` option (default 256, up to 1000) caps the size of these groups. Big groups go past the mob cap and can cause a short lag spike.
-- `removeSpawns` lines for one dimension that remove a mob entirely now also stop it appearing when new chunks generate, such as animals in fresh terrain.
-- `experienceModifiers`: between two equally specific lines, the first one now wins, the same as the other lists.
-- New `/mobsettings spawns <entity>` command lists every biome in your current dimension where a mob spawns naturally, with weight, share of its category and group size, after all rules. `/mobsettings spawns here` lists everything that can spawn where you're standing, including structure spawns. Both need operator permission.
+- Mob Settings now needs TheDragonLib 1.3.0 or newer, on both the client and the server. The rule list screens now come from it.
+- Every rule list can copy one line, copy all lines, and paste lines from the clipboard. Invalid and duplicate lines are skipped when pasting.
+- `extraDrops`, `removeDrops`, `addSpawns` and `removeSpawns` get an "Add from list" button. Pick a mob, then pick lines made from the opposite list (for example, `removeDrops` lines from your `extraDrops`). Operators also get what the server says the mob drops (its loot table) or where it spawns (every dimension, after all rules).
+- New `/mobsettings drops <entity>` command lists every item a mob's loot table can drop. It needs operator permission.
+- In a world, only operators can use "Add from list". The mob list shows how many drops, biomes and config lines each mob has, and hides mobs with none. `removeSpawns` and `removeDrops` also offer an "Everything" line for the mob.
+- `/mobsettings spawns` and `/mobsettings drops` take a dimension (or `all` for spawns). Long spawn lists are grouped and split into pages with clickable Prev/Next buttons.
+- The config screens show where you are (for example "Mob Settings › Remove Spawns › Edit line 3"), and a yellow ● when a list has unsaved changes. Leaving with Esc or Cancel after changes asks whether to save, discard or keep editing.
+- Copy, Paste and Delete have their own colours. Paste's tooltip previews the clipboard, and pasting reports what was added, what was already there and what was invalid; hover the message to see the skipped lines and why.
+- Lines copied from one list can be pasted into another: the entity, item, dimension and biome carry over, and missing numbers get defaults (for example weight 10 and group 1–4 for `addSpawns`). Lines copied straight from the .toml file (with quotes and commas) can be pasted too.
+- New `/mobsettings inspect [target]` command shows the mob you're looking at (or a selector's target): its category, dimension, biome, whether it despawns, its attributes against their defaults, and the Mob Settings rules that apply to it. `[Show NBT]` opens the full data. It needs operator permission.
+- On a server, players who aren't operators get a notice instead of the config screen: the rules there are the server's, and their local config has no effect on it. Single player, LAN hosts and operators are unchanged.
+- `/mobsettings inspect type <entity>` shows a mob type's category and rules without needing a live mob.
+- **Experimental** (turn on `experimentalInspectScreen`, off by default): `/mobsettings inspect` opens a screen instead of printing to chat, with the mob in 3D and tabs for its overview, equipment, spawns, drops and rules. Drops taken away by `removeDrops` are struck through and marked removed (or removed N% of the time); `extraDrops` are listed as added. Spawn rule lines saved since the world loaded are marked as taking effect after a restart. On the Equipment tab, edit, clear or reset each slot, copy the mob as an `addSpawns` line or its data, paste gear, save it to the config, or apply it to the live mob. `/mobsettings inspect chat` still prints to chat. Operators only. It may change or break between versions.
