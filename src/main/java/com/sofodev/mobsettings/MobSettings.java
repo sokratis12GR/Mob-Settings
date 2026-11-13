@@ -33,7 +33,8 @@ public final class MobSettings {
         NeoForge.EVENT_BUS.addListener(MobAttributes::onEntityJoinLevel);
         // After attributes, so a mob's data is merged over what they set.
         NeoForge.EVENT_BUS.addListener(MobSpawnData::onEntityJoinLevel);
-        NeoForge.EVENT_BUS.addListener(MobExperience::onExperienceDrop);
+        // Lowest priority so the multiplier also covers experience other mods add through this event.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, MobExperience::onExperienceDrop);
         NeoForge.EVENT_BUS.addListener(MobDamage::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(MobDespawn::onMobDespawn);
         NeoForge.EVENT_BUS.addListener(MobSpawnLight::onFinalizeSpawn);

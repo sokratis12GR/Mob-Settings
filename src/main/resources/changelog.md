@@ -1,4 +1,10 @@
-## Changes
+## 26.1.2 - 1.6.1
+
+- Make experience modifying happen last so that it can be applied on all mods.
+
+## 26.1.2 - 1.6.0
+
+### Changes
 
 - Mob Settings now needs TheDragonLib 1.5.0 or newer, on both the client and the server. The rule list screens now come from it.
 - Every rule list can copy one line, copy all lines, and paste lines from the clipboard. Invalid and duplicate lines are skipped when pasting.
