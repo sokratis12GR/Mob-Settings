@@ -35,6 +35,9 @@ import org.jspecify.annotations.Nullable;
 
 /** Searchable option sources for the rule editor's picker fields. */
 final class Suggestions {
+    /** What a picker field lists. */
+    enum Kind { ENTITY, SPAWNABLE_ENTITY, ITEM, DIMENSION, BIOME, ATTRIBUTE }
+
     record Option(String id, String name) {
         boolean matches(String query) {
             return query.isEmpty() || id.contains(query) || name.toLowerCase(Locale.ROOT).contains(query);
@@ -45,7 +48,7 @@ final class Suggestions {
 
     private Suggestions() {}
 
-    static List<Option> options(RuleType.Kind kind, @Nullable String entityContext) {
+    static List<Option> options(Kind kind, @Nullable String entityContext) {
         return switch (kind) {
             case ENTITY -> entities != null ? entities : (entities = entityOptions(false));
             case SPAWNABLE_ENTITY -> spawnableEntities != null ? spawnableEntities : (spawnableEntities = entityOptions(true));
@@ -53,21 +56,20 @@ final class Suggestions {
             case ATTRIBUTE -> attributeOptions(entityContext);
             case DIMENSION -> dimensionOptions();
             case BIOME -> biomeOptions();
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> List.of();
         };
     }
 
     /** Whether a picker value is an entity tag or a whole mod ({@code modid:*}) rather than a single entity. */
-    static boolean isSelector(RuleType.Kind kind, String value) {
+    static boolean isSelector(Kind kind, String value) {
         return isEntity(kind) && (value.startsWith("#") || value.endsWith(":*"));
     }
 
-    private static boolean isEntity(RuleType.Kind kind) {
-        return kind == RuleType.Kind.ENTITY || kind == RuleType.Kind.SPAWNABLE_ENTITY;
+    private static boolean isEntity(Kind kind) {
+        return kind == Kind.ENTITY || kind == Kind.SPAWNABLE_ENTITY;
     }
 
     /** Entity tags (written #tag) and whole mods (written modid:*), for fields that accept more than one entity. */
-    static List<Option> selectors(RuleType.Kind kind) {
+    static List<Option> selectors(Kind kind) {
         if (!isEntity(kind)) return List.of();
         if (entitySelectors == null) {
             List<Option> tags = new ArrayList<>();
@@ -105,13 +107,13 @@ final class Suggestions {
         return Component.translatable("mobsettings.ui.entityMod", name).getString();
     }
 
-    static boolean isKnown(RuleType.Kind kind, String id) {
+    static boolean isKnown(Kind kind, String id) {
         // Entity tags are datapack-driven, so only a mod's wildcard can be checked.
         if (isSelector(kind, id)) {
             return id.startsWith("#") ? Identifier.tryParse(id.substring(1)) != null
                     : selectors(kind).stream().anyMatch(o -> o.id().equals(id));
         }
-        Identifier parsed = Identifier.tryParse(kind == RuleType.Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
+        Identifier parsed = Identifier.tryParse(kind == Kind.BIOME && id.startsWith("#") ? id.substring(1) : id);
         if (parsed == null) return false;
         return switch (kind) {
             case ENTITY, SPAWNABLE_ENTITY -> options(kind, null).stream().anyMatch(o -> o.id().equals(parsed.toString()));
@@ -119,7 +121,6 @@ final class Suggestions {
             case ATTRIBUTE -> BuiltInRegistries.ATTRIBUTE.containsKey(parsed);
             // Biomes, biome tags and dimensions are datapack-driven, so modded ones can't be listed from the title screen.
             case DIMENSION, BIOME -> true;
-            case INTEGER, DECIMAL, ATTRIBUTE_VALUE, FLAG -> false;
         };
     }
 
@@ -224,9 +225,9 @@ final class Suggestions {
     }
 
     /** Player-facing name for an ID; wildcards and unknown IDs are described rather than left raw. */
-    static String displayName(RuleType.Kind kind, String id) {
+    static String displayName(Kind kind, String id) {
         if (id.equals("*")) return anyLabel(kind).getString();
-        if (kind == RuleType.Kind.BIOME && id.startsWith("#")) return tagName(id);
+        if (kind == Kind.BIOME && id.startsWith("#")) return tagName(id);
         if (isSelector(kind, id)) {
             return id.startsWith("#") ? Component.translatable("mobsettings.ui.entityTag", id).getString()
                     : modName(id.substring(0, id.length() - 2));
@@ -237,7 +238,7 @@ final class Suggestions {
         return options(kind, null).stream().filter(o -> o.id().equals(fullId)).findFirst().map(Option::name).orElse(id);
     }
 
-    static Component anyLabel(RuleType.Kind kind) {
+    static Component anyLabel(Kind kind) {
         String suffix = switch (kind) {
             case ITEM -> "item";
             case DIMENSION -> "dimension";
@@ -248,9 +249,9 @@ final class Suggestions {
     }
 
     /** Explanation shown when hovering an option, if this mod or a translation provides one. */
-    static @Nullable Component help(RuleType.Kind kind, String id) {
+    static @Nullable Component help(Kind kind, String id) {
         if (id.equals("*")) return Component.translatable("mobsettings.ui.any.help");
-        if (kind != RuleType.Kind.ATTRIBUTE) return null;
+        if (kind != Kind.ATTRIBUTE) return null;
         Identifier parsed = Identifier.tryParse(id);
         if (parsed == null) return null;
         String key = "mobsettings.attribute." + parsed.getNamespace() + "." + parsed.getPath();

@@ -67,9 +67,19 @@ neoForge {
 
 repositories {
     mavenCentral()
+
+    maven {
+        url = 'https://www.cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
 }
 
-// Mob Settings is pure Java and does not require GeckoLib or TheDragonLib.
+dependencies {
+    // The rule list config screens: TheDragonLib 1.5.0 for 26.1.2.
+    implementation "curse.maven:thedragonlib-248055:9581448"
+}
 
 tasks.named('processResources', ProcessResources).configure {
     def replaceProperties = [
@@ -132,6 +142,10 @@ modrinth {
     loaders = ['neoforge']
 
     changelog = changelogText
+
+    dependencies {
+        required.project 'thedragonlib'
+    }
 }
 
 tasks.register('publishModrinth') {
@@ -160,6 +174,7 @@ tasks.register('publishCurseForge', net.darkhax.curseforgegradle.TaskPublishCurs
 
         mainFile.addGameVersion(minecraft_version.toString())
         mainFile.addEnvironment('Client', 'Server')
+        mainFile.addRequirement('thedragonlib')
     }
 }
 

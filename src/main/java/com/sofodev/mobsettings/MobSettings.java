@@ -7,6 +7,9 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 @Mod(MobSettings.MODID)
 public final class MobSettings {
@@ -16,6 +19,16 @@ public final class MobSettings {
         container.registerConfig(ModConfig.Type.COMMON, MSConfig.SPEC);
         modBus.addListener(ModConfigEvent.Loading.class, MSConfig::upgrade);
         modBus.addListener(ModConfigEvent.Reloading.class, MSConfig::upgrade);
+        modBus.addListener(ModConfigEvent.Reloading.class, event -> MobLookups.clearCache());
+        NeoForge.EVENT_BUS.addListener(OnDatapackSyncEvent.class, event -> {
+            // Fired with no player after /reload, which can change loot tables and biomes.
+            if (event.getPlayer() == null) MobLookups.clearCache();
+        });
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> {
+            MobLookups.clearCache();
+            MobNetwork.clearCooldowns();
+        });
+        NeoForge.EVENT_BUS.addListener(PlayerEvent.PlayerLoggedOutEvent.class, event -> MobNetwork.forget(event.getEntity()));
         NeoForge.EVENT_BUS.addListener(MobDrops::onLivingDrops);
         NeoForge.EVENT_BUS.addListener(MobAttributes::onEntityJoinLevel);
         // After attributes, so a mob's data is merged over what they set.
@@ -33,7 +46,10 @@ public final class MobSettings {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnPlacementCheck);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onPositionCheck);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, MobSpawns::onSpawnClusterSize);
+        NeoForge.EVENT_BUS.addListener(MobSettingsCommand::register);
         NeoForge.EVENT_BUS.addListener(MobSpawnsCommand::register);
+        NeoForge.EVENT_BUS.addListener(MobInspectCommand::register);
+        modBus.addListener(MobNetwork::register);
         MobSpawns.register(modBus);
     }
 }

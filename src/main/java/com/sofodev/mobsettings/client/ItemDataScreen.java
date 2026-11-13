@@ -1,6 +1,8 @@
 package com.sofodev.mobsettings.client;
 
+import java.util.List;
 import java.util.function.Consumer;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -21,7 +23,12 @@ final class ItemDataScreen extends DataScreen {
     private @Nullable EditBox damageBox;
 
     ItemDataScreen(Screen parent, String text, boolean keepItemOnPaste, Consumer<String> onDone) {
-        super(parent, Component.translatable("mobsettings.ui.data.itemTitle"));
+        this(parent, Component.translatable("mobsettings.ui.data.itemTitle"), text, keepItemOnPaste, onDone);
+    }
+
+    /** @param title what the breadcrumb calls this item, such as the equipment slot it's for */
+    ItemDataScreen(Screen parent, Component title, String text, boolean keepItemOnPaste, Consumer<String> onDone) {
+        super(parent, title);
         ItemLine parsed = ItemLine.parse(text);
         this.line = parsed != null ? parsed : new ItemLine();
         this.keepItemOnPaste = keepItemOnPaste;
@@ -31,10 +38,10 @@ final class ItemDataScreen extends DataScreen {
     @Override
     protected void buildRows() {
         Component itemHelp = Component.translatable("mobsettings.ui.data.help.item");
-        row(Component.translatable("mobsettings.ui.field.item"), itemHelp, picker(box(Component.translatable("mobsettings.ui.field.item"), itemHelp, line.item, 0, value -> {
+        row(Component.translatable("mobsettings.ui.field.item"), itemHelp, itemIcon(() -> line.item), picker(box(Component.translatable("mobsettings.ui.field.item"), itemHelp, line.item, 0, value -> {
             line.item = value.trim();
             updateDamageHint();
-        }), () -> Suggestions.options(RuleType.Kind.ITEM, null)));
+        }), () -> Suggestions.options(Suggestions.Kind.ITEM, null)));
 
         Component damageHelp = Component.translatable("mobsettings.ui.data.help.damage");
         damageBox = box(Component.translatable("mobsettings.ui.data.damage"), damageHelp, line.damage, 0, value -> line.damage = value);
@@ -59,7 +66,7 @@ final class ItemDataScreen extends DataScreen {
             picker(id, Suggestions::enchantments);
             EditBox level = box(Component.translatable("mobsettings.ui.data.level"), Component.translatable("mobsettings.ui.data.help.level"), entry.value, 34, value -> entry.value = value);
             level.setHint(hint("mobsettings.ui.data.hint.level"));
-            row(CommonComponents.EMPTY, null, id, level, removeButton(() -> line.enchantments.remove(entry)));
+            entryRow(line.enchantments, entry, id, level);
         }
         row(CommonComponents.EMPTY, null, button(Component.translatable("mobsettings.ui.data.addEnchantment"), null, 0, () -> {
             line.enchantments.add(new ItemLine.Entry("", "1"));
@@ -73,7 +80,7 @@ final class ItemDataScreen extends DataScreen {
             picker(id, Suggestions::dataComponents);
             EditBox value = box(Component.translatable("mobsettings.ui.data.value"), Component.translatable("mobsettings.ui.data.help.value"), entry.value, 0, text -> entry.value = text);
             value.setHint(hint("mobsettings.ui.data.hint.value"));
-            row(CommonComponents.EMPTY, null, id, value, removeButton(() -> line.others.remove(entry)));
+            entryRow(line.others, entry, id, value);
         }
         row(CommonComponents.EMPTY, null, button(Component.translatable("mobsettings.ui.data.addComponent"), null, 0, () -> {
             line.others.add(new ItemLine.Entry("", ""));
@@ -81,11 +88,33 @@ final class ItemDataScreen extends DataScreen {
         }));
     }
 
-    private Button removeButton(Runnable remove) {
-        return button(Component.literal("x"), Component.translatable("mobsettings.ui.delete"), 20, () -> {
-            remove.run();
+    /** Copy, paste, duplicate and remove for one enchantment or component, copied as {@code key=value}. */
+    private void entryRow(List<ItemLine.Entry> list, ItemLine.Entry entry, EditBox key, EditBox value) {
+        Button copy = button(Component.translatable("mobsettings.ui.data.copyShort"), Component.translatable("mobsettings.ui.data.help.copyEntry"), 20, () -> {
+            minecraft.keyboardHandler.setClipboard(entry.key + "=" + entry.value);
+            setNotice(Component.translatable("mobsettings.ui.data.copied"));
+        });
+        Button paste = button(Component.translatable("mobsettings.ui.data.pasteShort"), Component.translatable("mobsettings.ui.data.help.pasteEntry"), 20, () -> {
+            String clipboard = minecraft.keyboardHandler.getClipboard().trim();
+            int split = clipboard.indexOf('=');
+            if (clipboard.isEmpty() || split == 0) {
+                setNotice(Component.translatable("mobsettings.ui.error.badData").withStyle(ChatFormatting.RED));
+                return;
+            }
+            entry.key = (split < 0 ? clipboard : clipboard.substring(0, split)).trim();
+            if (split >= 0) entry.value = clipboard.substring(split + 1).trim();
+            rebuild();
+            setNotice(Component.translatable("mobsettings.ui.data.pasted"));
+        });
+        Button duplicate = button(Component.literal("+"), Component.translatable("mobsettings.ui.data.help.duplicateEntry"), 20, () -> {
+            list.add(list.indexOf(entry) + 1, new ItemLine.Entry(entry.key, entry.value));
             rebuild();
         });
+        Button remove = button(Component.literal("x"), Component.translatable("mobsettings.ui.delete"), 20, () -> {
+            list.remove(entry);
+            rebuild();
+        });
+        row(CommonComponents.EMPTY, null, key, value, copy, paste, duplicate, remove);
     }
 
     private static Component toggleLabel(boolean on) {
@@ -121,6 +150,12 @@ final class ItemDataScreen extends DataScreen {
         if (problem != null) return problem;
         line = pasted;
         return null;
+    }
+
+    @Override
+    protected void load(String text) {
+        ItemLine loaded = ItemLine.parse(text);
+        if (loaded != null) line = loaded;
     }
 
     @Override

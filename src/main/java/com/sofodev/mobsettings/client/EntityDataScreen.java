@@ -49,9 +49,9 @@ final class EntityDataScreen extends DataScreen {
             line.counts.remove(slot);
         });
         item.setHint(hint("mobsettings.ui.data.hint.slot"));
-        picker(item, () -> Suggestions.options(RuleType.Kind.ITEM, null));
+        picker(item, () -> Suggestions.options(Suggestions.Kind.ITEM, null));
         Button edit = button(Component.literal("..."), Component.translatable("mobsettings.ui.data.help.editSlot"), 20, () ->
-                minecraft.setScreen(new ItemDataScreen(this, line.items.getOrDefault(slot, ""), false, text -> line.items.put(slot, text))));
+                minecraft.setScreen(new ItemDataScreen(this, label, line.items.getOrDefault(slot, ""), false, text -> line.items.put(slot, text))));
         EditBox chance = box(Component.translatable("mobsettings.ui.data.dropChance"), Component.translatable("mobsettings.ui.data.help.dropChance"),
                 line.chances.getOrDefault(slot, ""), 34, value -> line.chances.put(slot, value));
         chance.setHint(hint("mobsettings.ui.data.hint.dropChance"));
@@ -66,7 +66,7 @@ final class EntityDataScreen extends DataScreen {
             line.counts.remove(slot);
             rebuild();
         });
-        row(label, null, item, edit, chance, copy, paste, clear);
+        row(label, null, itemIcon(() -> line.items.getOrDefault(slot, "")), item, edit, chance, copy, paste, clear);
     }
 
     /** A slot takes the whole copied item, since it has no item of its own worth keeping. */
@@ -107,6 +107,12 @@ final class EntityDataScreen extends DataScreen {
         if (problem != null) return problem;
         line = pasted;
         return null;
+    }
+
+    @Override
+    protected void load(String text) {
+        EntityLine loaded = EntityLine.parse(text.equals("{}") ? "" : text);
+        if (loaded != null) line = loaded;
     }
 
     @Override

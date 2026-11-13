@@ -266,6 +266,20 @@ final class Rules {
             this.parser = parser;
         }
 
+        String key() { return key; }
+
+        ModConfigSpec.ConfigValue<List<? extends String>> config() { return value; }
+
+        /** One line parsed on its own, or null if it is blank or invalid. Nothing is logged. */
+        @Nullable T parse(String line) {
+            if (line.isBlank()) return null;
+            try {
+                return parser.apply(line);
+            } catch (Invalid ex) {
+                return null;
+            }
+        }
+
         /** The valid rules in config order. Cheap to call: config values are cached until the file reloads. */
         synchronized List<T> get() {
             List<? extends String> current = value.get();

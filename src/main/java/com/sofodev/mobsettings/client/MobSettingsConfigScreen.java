@@ -1,5 +1,8 @@
 package com.sofodev.mobsettings.client;
 
+import com.sofodev.mobsettings.SpawnLines;
+import com.sofodev.thedragonlib.client.config.RuleListScreen;
+import com.sofodev.thedragonlib.client.config.RuleType;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -30,18 +33,19 @@ public final class MobSettingsConfigScreen extends ConfigurationScreen.Configura
     @Override
     @SuppressWarnings("unchecked")
     protected <T> @Nullable Element createList(String key, ModConfigSpec.ListValueSpec spec, ModConfigSpec.ConfigValue<List<T>> list) {
-        RuleType type = RuleType.TYPES.get(key);
+        RuleType type = MobSettingsRules.TYPES.get(key);
         if (type == null) return super.createList(key, spec, list);
         ModConfigSpec.ConfigValue<List<String>> rules = (ModConfigSpec.ConfigValue<List<String>>) (Object) list;
         Component tooltip = getTooltipComponent(key, null);
         Button button = Button.builder(Component.translatable(SECTION, Component.translatable(SECTION_TEXT)),
                         // getRaw: world-restart values keep their old cached value after set() until the world reloads.
-                        b -> minecraft.setScreen(new RuleListScreen(this, type, rules.getRaw(), updated -> {
+                        b -> minecraft.setScreen(new RuleListScreen(this, type, MobSettingsRules.CONTEXT, rules.getRaw(), LookupPicker.forKey(key), updated -> {
                             if (!updated.equals(rules.getRaw())) {
                                 rules.set(updated);
                                 onChanged(key);
                             }
-                        })))
+                        }).withConversions(MobSettingsRules.CONVERSIONS)
+                                .withGrouping(MobSettingsRules.ENTITY_FIELD, MobSettingsRules.GROUP_THRESHOLD, SpawnLines::fieldId)))
                 .tooltip(Tooltip.create(tooltip))
                 .build();
         return new Element(Component.translatable(SECTION, getTranslationComponent(key)), tooltip, button, false);

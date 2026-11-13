@@ -1,0 +1,193 @@
+package com.sofodev.mobsettings;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.util.random.Weighted;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.MobSpawnSettings;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.neoforged.neoforge.event.level.LevelEvent;
+
+/** Server-side lookups of what a mob drops and where it spawns, shared by the commands and the config screen. */
+public final class MobLookups {
+    private MobLookups() {}
+
+    /** A biome of a dimension the mob spawns in, with every rule applied. {@code total} is the category's weight. */
+    public record Spawn(Identifier dimension, Holder<Biome> biome, MobSpawnSettings.SpawnerData data, int weight, int total) {
+        public String biomeId() {
+            return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
+        }
+    }
+
+    /**
+     * The items the mob's loot table can drop, sorted by ID. Read from the encoded table, so every entry type that
+     * names an item, item tag or nested table is found without reaching into loot internals.
+     */
+    public static List<Identifier> drops(MinecraftServer server, EntityType<?> type) {
+        Set<Identifier> items = new TreeSet<>();
+        RegistryOps<JsonElement> ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        type.getDefaultLootTable().ifPresent(key -> collect(server, ops, key, items, new HashSet<>()));
+        return List.copyOf(items);
+    }
+
+    private static void collect(MinecraftServer server, RegistryOps<JsonElement> ops, ResourceKey<LootTable> key,
+                                Set<Identifier> items, Set<ResourceKey<LootTable>> seen) {
+        if (!seen.add(key)) return;
+        LootTable table = server.reloadableRegistries().getLootTable(key);
+        if (table == LootTable.EMPTY) return;
+        LootTable.DIRECT_CODEC.encodeStart(ops, table).result()
+                .ifPresent(json -> walk(server, ops, json, items, seen));
+    }
+
+    private static void walk(MinecraftServer server, RegistryOps<JsonElement> ops, JsonElement json,
+                             Set<Identifier> items, Set<ResourceKey<LootTable>> seen) {
+        if (json.isJsonArray()) {
+            for (JsonElement element : json.getAsJsonArray()) walk(server, ops, element, items, seen);
+            return;
+        }
+        if (!json.isJsonObject()) return;
+        JsonObject object = json.getAsJsonObject();
+        String type = string(object, "type");
+        JsonElement name = object.get("name");
+        if (type != null && name != null) {
+            switch (Identifier.parse(type).toString()) {
+                case "minecraft:item" -> {
+                    Identifier id = Identifier.tryParse(name.getAsString());
+                    if (id != null && !id.equals(BuiltInRegistries.ITEM.getDefaultKey())) items.add(id);
+                }
+                case "minecraft:tag" -> {
+                    Identifier id = Identifier.tryParse(name.getAsString());
+                    if (id != null) {
+                        for (Holder<Item> item : BuiltInRegistries.ITEM.getTagOrEmpty(TagKey.create(Registries.ITEM, id))) {
+                            item.unwrapKey().ifPresent(k -> items.add(k.identifier()));
+                        }
+                    }
+                }
+                case "minecraft:loot_table" -> {
+                    // Either the ID of another table or an inline one.
+                    if (name.isJsonPrimitive()) {
+                        Identifier id = Identifier.tryParse(name.getAsString());
+                        if (id != null) collect(server, ops, ResourceKey.create(Registries.LOOT_TABLE, id), items, seen);
+                    } else {
+                        walk(server, ops, name, items, seen);
+                    }
+                }
+                default -> {}
+            }
+        }
+        // Pools, composite children and anything else that can hold entries.
+        for (var entry : object.entrySet()) {
+            if (!entry.getKey().equals("name")) walk(server, ops, entry.getValue(), items, seen);
+        }
+    }
+
+    private static String string(JsonObject object, String key) {
+        JsonElement element = object.get(key);
+        return element != null && element.isJsonPrimitive() ? element.getAsString() : null;
+    }
+
+    /**
+     * Where the mob spawns naturally in a dimension: its biome spawn lists plus the dimension's rules. Structure
+     * spawns (fortresses, witch huts...) aren't included, as they depend on the position.
+     */
+    public static List<Spawn> spawns(ServerLevel level, EntityType<?> type) {
+        Identifier dimension = level.dimension().identifier();
+        MobCategory category = type.getCategory();
+        List<Spawn> result = new ArrayList<>();
+        List<Holder<Biome>> biomes = level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes().stream()
+                .sorted((a, b) -> id(a).compareTo(id(b))).toList();
+        for (Holder<Biome> biome : biomes) {
+            LevelEvent.PotentialSpawns spawns = new LevelEvent.PotentialSpawns(level, category, BlockPos.ZERO,
+                    biome.value().getMobSettings().getMobs(category));
+            MobSpawns.applyDimensionRules(spawns, dimension, () -> biome);
+            int total = 0;
+            for (Weighted<MobSpawnSettings.SpawnerData> entry : spawns.getSpawnerDataList()) total += entry.weight();
+            for (Weighted<MobSpawnSettings.SpawnerData> entry : spawns.getSpawnerDataList()) {
+                if (entry.value().type() == type) result.add(new Spawn(dimension, biome, entry.value(), entry.weight(), total));
+            }
+        }
+        return result;
+    }
+
+    /** {@link #spawns(ServerLevel, EntityType)} for every loaded dimension. */
+    public static List<Spawn> spawns(MinecraftServer server, EntityType<?> type) {
+        List<Spawn> result = new ArrayList<>();
+        for (ServerLevel level : server.getAllLevels()) result.addAll(spawns(level, type));
+        return result;
+    }
+
+    // The mob list's counts walk every loot table or every biome, so they're kept until a reload or config change.
+    private static volatile Map<EntityType<?>, Integer> cachedDropCounts, cachedSpawnCounts;
+
+    /** Forgets the cached counts; called on config reloads, /reload and server stop. */
+    public static void clearCache() {
+        cachedDropCounts = null;
+        cachedSpawnCounts = null;
+    }
+
+    public static Map<EntityType<?>, Integer> cachedDropCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = cachedDropCounts;
+        if (counts == null) cachedDropCounts = counts = Map.copyOf(dropCounts(server));
+        return counts;
+    }
+
+    public static Map<EntityType<?>, Integer> cachedSpawnCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = cachedSpawnCounts;
+        if (counts == null) cachedSpawnCounts = counts = Map.copyOf(spawnCounts(server));
+        return counts;
+    }
+
+    /** For the mob list: how many items each mob's loot table can drop, for mobs that drop any. */
+    public static Map<EntityType<?>, Integer> dropCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = new HashMap<>();
+        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            int count = drops(server, type).size();
+            if (count > 0) counts.put(type, count);
+        }
+        return counts;
+    }
+
+    /** For the mob list: in how many biomes (across all dimensions) each mob spawns naturally, after the rules. */
+    public static Map<EntityType<?>, Integer> spawnCounts(MinecraftServer server) {
+        Map<EntityType<?>, Integer> counts = new HashMap<>();
+        for (ServerLevel level : server.getAllLevels()) {
+            Identifier dimension = level.dimension().identifier();
+            for (Holder<Biome> biome : level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes()) {
+                Set<EntityType<?>> here = new HashSet<>();
+                for (MobCategory category : MobCategory.values()) {
+                    LevelEvent.PotentialSpawns spawns = new LevelEvent.PotentialSpawns(level, category, BlockPos.ZERO,
+                            biome.value().getMobSettings().getMobs(category));
+                    MobSpawns.applyDimensionRules(spawns, dimension, () -> biome);
+                    for (Weighted<MobSpawnSettings.SpawnerData> entry : spawns.getSpawnerDataList()) here.add(entry.value().type());
+                }
+                for (EntityType<?> type : here) counts.merge(type, 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    private static String id(Holder<Biome> biome) {
+        return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
+    }
+}

@@ -173,6 +173,8 @@ public final class MobSpawns implements BiomeModifier {
      * restrictions and spawn data still apply to each member. Unlike vanilla it searches a few blocks up and down and
      * widens with the group, so the min is reached unless the area is really full.
      */
+    private static final int MAX_PLACEMENT_ATTEMPTS = 256;
+
     private static void placeGroup(ServerLevel level, Mob leader, int count) {
         if (count <= 0) return;
         EntityType<?> type = leader.getType();
@@ -180,7 +182,9 @@ public final class MobSpawns implements BiomeModifier {
         BlockPos origin = leader.blockPosition();
         int radius = 4 + (int) Math.ceil(Math.sqrt(count));
         int placed = 0;
-        for (int attempt = 0; attempt < count * 8 && placed < count; attempt++) {
+        // A bounded number of tries, so a crowded area can't make one spawn cost thousands of position checks.
+        int attempts = Math.min(count * 4, MAX_PLACEMENT_ATTEMPTS);
+        for (int attempt = 0; attempt < attempts && placed < count; attempt++) {
             int x = origin.getX() + random.nextInt(2 * radius + 1) - radius;
             int z = origin.getZ() + random.nextInt(2 * radius + 1) - radius;
             BlockPos pos = standingSpot(level, type, x, origin.getY(), z, random);

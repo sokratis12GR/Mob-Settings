@@ -26,3 +26,10 @@ type="required"
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
+
+[[dependencies.mobsettings]]
+modId="thedragonlib"
+type="required"
+versionRange="[1.5.0,)"
+ordering="AFTER"
+side="BOTH"

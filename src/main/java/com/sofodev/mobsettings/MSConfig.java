@@ -22,6 +22,7 @@ public final class MSConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> EXPERIENCE_MODIFIERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DESPAWN_RANGES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LIGHT_SPAWN_RESTRICTIONS;
+    public static final ModConfigSpec.BooleanValue EXPERIMENTAL_INSPECT_SCREEN;
 
     private MSConfig() {}
 
@@ -134,7 +135,7 @@ public final class MSConfig {
                 "These groups are placed by this mod rather than vanilla, which stops at about 4 and rarely gets past 20.",
                 "Each group is placed at once, and the mob cap is only checked before it, so a big group goes past",
                 "the cap and can cause a short lag spike. Groups placed while chunks generate stay inside one chunk.")
-                .defineInRange("maxGroupPlacement", 256, 1, 1000);
+                .defineInRange("maxGroupPlacement", 64, 1, 128);
         ATTRIBUTE_OVERRIDES = b.comment(
                 "Override a base attribute value when an entity joins the world: entity_id|[dimension_id]|attribute_id|value.",
                 "Only applies if the entity already supports the given attribute; values are clamped to the attribute's range.",
@@ -222,6 +223,11 @@ public final class MSConfig {
                 "Example: minecraft:zombie|?|7",
                 "Example: minecraft:zombie|0|7|minecraft:overworld|#minecraft:is_forest")
                 .defineListAllowEmpty("lightSpawnRestrictions", List.of(), () -> "", o -> o instanceof String);
+        EXPERIMENTAL_INSPECT_SCREEN = b.comment(
+                "EXPERIMENTAL: /mobsettings inspect opens a screen instead of printing to chat: the mob in 3D with its gear,",
+                "where it spawns, what it drops (removed drops marked), and every rule that covers it. Gear can be copied as an",
+                "addSpawns line, saved to this file or applied to the live mob. Operators only. May change or break between versions.")
+                .define("experimentalInspectScreen", false);
         SPEC = b.build();
     }
 
