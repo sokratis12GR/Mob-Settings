@@ -1,3 +1,7 @@
+## 1.21.1 - 1.3.1
+
+- Make experience modifying happen last so that it can be applied on all mods.
+
 ## 1.21.1 - 1.3.0
 
 - Mob Settings now needs TheDragonLib 1.3.0 or newer, on both the client and the server. The rule list screens now come from it.
